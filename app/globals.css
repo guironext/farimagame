@@ -1,0 +1,173 @@
+@import "tailwindcss";
+
+/* ------------------------------------------------------------------
+   Design tokens FarimaGame
+   Fond bleu nuit, accents ambre / orange, F CFA en émeraude, Pro en fuchsia.
+   ------------------------------------------------------------------ */
+:root {
+  --background: #050b1a;
+  --foreground: #f1f5f9;
+  --surface: #0b1428;
+  --surface-2: #101c36;
+  --surface-3: #16244a;
+  --line: rgb(255 255 255 / 0.08);
+  --line-strong: rgb(255 255 255 / 0.16);
+  --brand: #fbbf24;
+  --brand-2: #f97316;
+  --money: #34d399;
+  --pro: #e879f9;
+  --header-h: 3.5rem; /* hauteur de la barre du haut sur mobile */
+  --tabbar-h: 4rem; /* hauteur de la barre d'onglets du bas (hors zone de sécurité) */
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-brand: var(--brand);
+  --color-brand-2: var(--brand-2);
+  --color-money: var(--money);
+  --color-pro: var(--pro);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+
+  --radius-card: 1.25rem;
+  --radius-chip: 9999px;
+
+  --shadow-card: 0 1px 0 0 rgb(255 255 255 / 0.04) inset, 0 10px 30px -12px rgb(0 0 0 / 0.6);
+  --shadow-glow: 0 10px 30px -8px rgb(249 115 22 / 0.45);
+  --shadow-glow-sm: 0 6px 18px -6px rgb(251 191 36 / 0.45);
+
+  --animate-fade-up: fade-up 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+  --animate-sheet-up: sheet-up 0.32s cubic-bezier(0.22, 1, 0.36, 1) both;
+  --animate-fade-in: fade-in 0.2s ease-out both;
+  --animate-shimmer: shimmer 1.6s linear infinite;
+  --animate-float: float 6s ease-in-out infinite;
+  --animate-live-glow: live-glow 2.4s ease-in-out infinite;
+  --animate-goal: goal-flash 1.2s ease-out 3;
+
+  @keyframes fade-up {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes sheet-up {
+    from { transform: translateY(100%); }
+    to { transform: translateY(0); }
+  }
+  @keyframes fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  @keyframes shimmer {
+    from { background-position: -200% 0; }
+    to { background-position: 200% 0; }
+  }
+  @keyframes float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-8px); }
+  }
+  /* halo rouge des cartes « en direct » */
+  @keyframes live-glow {
+    0%, 100% { box-shadow: 0 0 0 0 rgb(244 63 94 / 0), var(--shadow-card); }
+    50% { box-shadow: 0 0 0 1px rgb(244 63 94 / 0.25), 0 0 28px -6px rgb(244 63 94 / 0.35), var(--shadow-card); }
+  }
+  /* « BUT ! » : le score clignote en vert */
+  @keyframes goal-flash {
+    0% { transform: scale(1); color: inherit; }
+    30% { transform: scale(1.18); color: #6ee7b7; }
+    100% { transform: scale(1); color: inherit; }
+  }
+}
+
+html {
+  -webkit-tap-highlight-color: transparent;
+  scroll-padding-top: calc(var(--header-h) + 1rem);
+}
+
+body {
+  background:
+    radial-gradient(900px 520px at 0% -10%, rgba(249, 115, 22, 0.14), transparent 60%),
+    radial-gradient(800px 480px at 110% 0%, rgba(168, 85, 247, 0.12), transparent 60%),
+    radial-gradient(700px 500px at 50% 120%, rgba(16, 185, 129, 0.07), transparent 60%),
+    var(--background);
+  background-attachment: fixed;
+  color: var(--foreground);
+  font-family: var(--font-geist-sans), system-ui, sans-serif;
+  overflow-x: hidden;
+}
+
+/* Surfaces réutilisables */
+@utility surface {
+  background: linear-gradient(180deg, rgb(255 255 255 / 0.05), rgb(255 255 255 / 0.02));
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+}
+@utility glass {
+  background: rgb(5 11 26 / 0.78);
+  backdrop-filter: blur(16px) saturate(150%);
+  -webkit-backdrop-filter: blur(16px) saturate(150%);
+}
+@utility text-gradient-brand {
+  background-image: linear-gradient(90deg, #fde68a, #fbbf24 35%, #f97316);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+@utility bg-brand-gradient {
+  background-image: linear-gradient(135deg, #fcd34d 0%, #fbbf24 35%, #f97316 100%);
+}
+@utility no-scrollbar {
+  scrollbar-width: none;
+  &::-webkit-scrollbar { display: none; }
+}
+/* Espace sous le contenu pour la barre d'onglets mobile */
+@utility pb-tabbar {
+  padding-bottom: calc(var(--tabbar-h) + var(--safe-bottom) + 1.5rem);
+}
+@utility bottom-above-tabbar {
+  bottom: calc(var(--tabbar-h) + var(--safe-bottom) + 0.75rem);
+}
+@utility pb-safe {
+  padding-bottom: var(--safe-bottom);
+}
+@utility skeleton {
+  background: linear-gradient(90deg, rgb(255 255 255 / 0.04) 0%, rgb(255 255 255 / 0.1) 50%, rgb(255 255 255 / 0.04) 100%);
+  background-size: 200% 100%;
+  animation: var(--animate-shimmer);
+  border-radius: 0.75rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+@keyframes pop {
+  0% { transform: scale(0.6); opacity: 0; }
+  100% { transform: scale(1); opacity: 1; }
+}
+.animate-pop { animation: pop 0.25s ease-out; }
+
+@keyframes roll {
+  0% { transform: rotate(0) scale(0.8); }
+  50% { transform: rotate(180deg) scale(1.1); }
+  100% { transform: rotate(360deg) scale(1); }
+}
+.animate-roll { animation: roll 0.5s ease-out; }
+
+/* Fond des bords d'un média (vidéo du logo) dans la page */
+@utility mask-fade-edges {
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 16%, #000 84%, transparent), linear-gradient(to right, transparent, #000 24%, #000 76%, transparent);
+  -webkit-mask-composite: source-in;
+  mask-image: linear-gradient(to bottom, transparent, #000 16%, #000 84%, transparent), linear-gradient(to right, transparent, #000 24%, #000 76%, transparent);
+  mask-composite: intersect;
+}
