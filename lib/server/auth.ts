@@ -1,89 +1,114 @@
-import crypto from "node:crypto";
-import { cookies } from "next/headers";
-import { readDb, type Db, type UserRow } from "./db";
+// Authentification : Clerk (https://clerk.com) gère les comptes, les mots de passe et les sessions.
+// FarimaGame garde son propre enregistrement « joueur » (portefeuilles Coris / Lions / F CFA, rôle, niveau)
+// dans data/db.json, relié au compte Clerk par clerkId et créé automatiquement à la première visite
+// d'un compte Clerk connecté (500 Coris de bienvenue, rôle JOUEUR).
+import { auth, currentUser as clerkCurrentUser } from "@clerk/nextjs/server";
+import { headers } from "next/headers";
+import { readDb, type UserRow } from "./db";
 import { AppError } from "./errors";
+import { provisionUser } from "./wallet";
+import { CLERK_ENABLED } from "../clerk";
 import { fromUnits } from "../config";
-import type { PublicUser, Role } from "../types";
+import { canManageMoney, type PublicUser, type Role } from "../types";
 
-export const SESSION_COOKIE = "fg_session";
-export const SESSION_DAYS = 30;
+/** En-tête utilisé UNIQUEMENT par les tests automatiques (scripts/test-paris.mjs), voir testUser(). */
+export const TEST_USER_HEADER = "x-farima-test-user";
 
-export function hashPassword(password: string, salt = crypto.randomBytes(16).toString("hex")) {
-  const hash = crypto.scryptSync(password, salt, 64).toString("hex");
-  return { hash, salt };
+/**
+ * Connexion de test, sans Clerk. Triple verrou :
+ *  1. NODE_ENV !== "production" : Next.js remplace process.env.NODE_ENV à la compilation, donc dans un
+ *     `next build` / `next start` ce bloc est supprimé du code : impossible à activer en production ;
+ *  2. FARIMA_TEST_AUTH=1 doit être défini au lancement du serveur ;
+ *  3. FARIMA_DATA_DIR doit pointer vers une base de test séparée (jamais data/db.json).
+ * Renvoie undefined quand le mode test n'est pas actif (on passe alors par Clerk).
+ */
+async function testUser(): Promise<UserRow | undefined> {
+  if (process.env.NODE_ENV !== "production") {
+    if (process.env.FARIMA_TEST_AUTH === "1" && process.env.FARIMA_DATA_DIR) {
+      const name = (await headers()).get(TEST_USER_HEADER)?.trim();
+      if (name) return provisionUser(`test:${name.toLowerCase()}`, { username: name, email: `${name.toLowerCase()}@test.invalid` });
+    }
+  }
+  return undefined;
 }
 
-export function verifyPassword(password: string, salt: string, hash: string) {
-  const h = crypto.scryptSync(password, salt, 64);
-  const expected = Buffer.from(hash, "hex");
-  return expected.length === h.length && crypto.timingSafeEqual(h, expected);
-}
-
-export function newSessionToken() {
-  return crypto.randomBytes(32).toString("hex");
-}
-
-export async function setSessionCookie(token: string) {
-  const c = await cookies();
-  c.set(SESSION_COOKIE, token, {
-    httpOnly: true,
-    sameSite: "lax",
-    path: "/",
-    secure: process.env.SECURE_COOKIES === "1",
-    maxAge: SESSION_DAYS * 24 * 3600,
-  });
-}
-
-export async function clearSessionCookie() {
-  const c = await cookies();
-  c.delete(SESSION_COOKIE);
-}
-
-export async function getSessionToken(): Promise<string | null> {
-  const c = await cookies();
-  return c.get(SESSION_COOKIE)?.value ?? null;
-}
-
-export function userFromToken(db: Db, token: string | null): UserRow | null {
-  if (!token) return null;
-  const s = db.sessions.find((x) => x.token === token);
-  if (!s || new Date(s.expiresAt).getTime() < Date.now()) return null;
-  return db.users.find((u) => u.id === s.userId) ?? null;
-}
-
-/** Utilisateur connecté (lecture seule) ou null. */
+/** Utilisateur connecté (crée sa fiche joueur à la première visite) ou null. */
 export async function currentUser(): Promise<UserRow | null> {
-  const token = await getSessionToken();
-  return userFromToken(readDb(), token);
+  const t = await testUser();
+  if (t) return t;
+  if (!CLERK_ENABLED) return null;
+
+  const { userId } = await auth();
+  if (!userId) return null;
+  const existing = readDb().users.find((u) => u.clerkId === userId);
+  if (existing) return existing;
+
+  // Première visite de ce compte Clerk : on lit son profil (pseudo, prénom, e-mail) pour créer la fiche joueur.
+  const cu = await clerkCurrentUser();
+  if (!cu) return null;
+  const email = cu.primaryEmailAddress?.emailAddress ?? cu.emailAddresses?.[0]?.emailAddress ?? null;
+  return provisionUser(userId, { username: cu.username, firstName: cu.firstName, email });
 }
 
-/** Renvoie l'identifiant de l'utilisateur connecté, ou lève 401. */
+export const getCurrentUser = currentUser;
+
+/** Renvoie l'identifiant (FarimaGame) de l'utilisateur connecté, ou lève 401. */
 export async function requireUserId(): Promise<string> {
   const u = await currentUser();
   if (!u) throw new AppError(401, "Vous devez être connecté.");
   return u.id;
 }
 
-/**
- * Rôle effectif. Si la variable d'environnement ADMIN_USERNAMES est définie (pseudos séparés par des virgules),
- * seuls ces comptes sont ADMIN. Sinon, c'est le rôle enregistré (le premier compte créé est ADMIN).
- */
-export function effectiveRole(u: UserRow): Role {
-  const list = (process.env.ADMIN_USERNAMES ?? "")
+const envList = (name: string) =>
+  (process.env[name] ?? "")
     .split(",")
     .map((s) => s.trim().toLowerCase())
     .filter(Boolean);
-  if (list.length > 0) return list.includes(u.usernameLower) ? "ADMIN" : "JOUEUR";
-  return u.role === "ADMIN" ? "ADMIN" : "JOUEUR";
+
+const listed = (u: UserRow, emails: string[], names: string[]) =>
+  (!!u.email && emails.includes(u.email.toLowerCase())) || names.includes(u.usernameLower);
+
+/**
+ * Rôle effectif.
+ *  - ADMIN_EMAILS / ADMIN_USERNAMES désignent les administrateurs.
+ *  - HOME_EMAILS / HOME_USERNAMES désignent la Maison (argent de la plateforme).
+ *  - Une liste remplace le rôle enregistré pour ce rôle-là. Sans liste, le rôle enregistré
+ *    est conservé : le premier compte qui se connecte devient ADMIN s'il n'existe encore
+ *    aucun administrateur capable de se connecter (voir provisionUser).
+ */
+export function effectiveRole(u: UserRow): Role {
+  const adminEmails = envList("ADMIN_EMAILS");
+  const adminNames = envList("ADMIN_USERNAMES");
+  const homeEmails = envList("HOME_EMAILS");
+  const homeNames = envList("HOME_USERNAMES");
+  const adminListed = adminEmails.length > 0 || adminNames.length > 0;
+  const homeListed = homeEmails.length > 0 || homeNames.length > 0;
+
+  if (homeListed && listed(u, homeEmails, homeNames)) return "HOME";
+  if (adminListed && listed(u, adminEmails, adminNames)) return "ADMIN";
+  if (adminListed && homeListed) return "JOUEUR";
+  if (adminListed) return u.role === "HOME" ? "HOME" : "JOUEUR";
+  if (homeListed) return u.role === "ADMIN" ? "ADMIN" : "JOUEUR";
+  if (u.role === "ADMIN" || u.role === "HOME") return u.role;
+  return "JOUEUR";
 }
 
 export const isAdmin = (u: UserRow) => effectiveRole(u) === "ADMIN";
+export const isHome = (u: UserRow) => effectiveRole(u) === "HOME";
 
 /** Renvoie l'identifiant de l'administrateur connecté, ou lève 401 / 403. */
 export async function requireAdminId(): Promise<string> {
   const u = await currentUser();
   if (!u) throw new AppError(401, "Vous devez être connecté.");
   if (!isAdmin(u)) throw new AppError(403, "Accès réservé aux administrateurs.");
+  return u.id;
+}
+
+/** Caisse, commissions, dépôts, retraits et règlement des mises. Maison ou administrateur. */
+export async function requireMoneyId(): Promise<string> {
+  const u = await currentUser();
+  if (!u) throw new AppError(401, "Vous devez être connecté.");
+  if (!canManageMoney(effectiveRole(u))) throw new AppError(403, "Accès réservé à la Maison.");
   return u.id;
 }
 

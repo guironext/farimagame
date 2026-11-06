@@ -1,13 +1,13 @@
 import { connection } from "next/server";
 import { fromUnits } from "@/lib/config";
-import { requireAdminId } from "@/lib/server/auth";
+import { requireMoneyId } from "@/lib/server/auth";
 import { readDb } from "@/lib/server/db";
 import { jsonError } from "@/lib/server/errors";
 
 export async function GET() {
   await connection();
   try {
-    await requireAdminId();
+    await requireMoneyId();
     const db = readDb();
     const sum = (type: string, cur: string) =>
       fromUnits(db.house.ledger.filter((l) => l.type === type && l.currency === cur).reduce((a, l) => a + l.amount, 0));

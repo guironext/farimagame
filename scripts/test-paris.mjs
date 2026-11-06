@@ -1,26 +1,100 @@
-// Test de bout en bout des paris sportifs / portefeuille F CFA.
-// À lancer contre un serveur qui utilise une base de TEST séparée, par exemple :
-//   FARIMA_DATA_DIR=/tmp/farima-test PORT=3100 npm start      (après npm run build)
+// Test de bout en bout des paris sportifs / portefeuille F CFA (+ protection des comptes avec Clerk).
+// Ne touche PAS à data/db.json : par défaut le script lance lui-même un serveur `next dev` de test
+//   - sur le port 3100, avec une base temporaire (FARIMA_DATA_DIR) et un dossier de compilation séparé (.next-test),
+//     donc il peut tourner à côté de votre `npm run dev` ;
+//   - avec FARIMA_TEST_AUTH=1 : les comptes de test se connectent par l'en-tête « x-farima-test-user »
+//     au lieu de Clerk. Ce raccourci n'existe qu'en développement : il est retiré du code par `next build`
+//     (voir lib/server/auth.ts), il est donc impossible à utiliser en production.
+//   node scripts/test-paris.mjs
+// On peut aussi viser un serveur déjà lancé (en dev, avec FARIMA_TEST_AUTH=1 et FARIMA_DATA_DIR) :
 //   node scripts/test-paris.mjs http://localhost:3100
-// Le premier compte créé dans une base vide devient ADMIN : ne lancez pas ce script sur votre vraie base.
-const BASE = process.argv[2] ?? "http://localhost:3100";
+import { spawn } from "node:child_process";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+
+const PORT = Number(process.env.TEST_PORT ?? 3100);
+const EXTERNAL = process.argv[2];
+const BASE = EXTERNAL ?? `http://localhost:${PORT}`;
 const suffix = Date.now().toString(36).slice(-5);
 let failures = 0;
 const ok = (cond, msg) => {
   console.log(`${cond ? "✅" : "❌"} ${msg}`);
   if (!cond) failures++;
 };
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-function client() {
-  let cookie = "";
+// ---------------------------------------------------------------- serveur de test
+let server = null;
+const tsconfigBefore = fs.readFileSync("tsconfig.json", "utf8"); // `next dev` y ajoute .next-test : on le remet à la fin
+function stopServer() {
+  if (server && server.exitCode === null) {
+    try {
+      process.kill(-server.pid, "SIGTERM");
+    } catch {
+      /* déjà arrêté */
+    }
+  }
+  try {
+    fs.writeFileSync("tsconfig.json", tsconfigBefore);
+  } catch {
+    /* rien */
+  }
+}
+process.on("exit", stopServer);
+process.on("SIGINT", () => process.exit(130));
+
+if (!EXTERNAL) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "farima-paris-"));
+  let log = "";
+  server = spawn(process.execPath, ["node_modules/next/dist/bin/next", "dev", "-p", String(PORT)], {
+    env: {
+      ...process.env,
+      NODE_ENV: "development",
+      FARIMA_TEST_AUTH: "1",
+      FARIMA_DATA_DIR: dir,
+      FARIMA_NEXT_DIST_DIR: ".next-test",
+      ODDS_API_KEY: "",
+      API_FOOTBALL_KEY: "",
+      ADMIN_EMAILS: "",
+      ADMIN_USERNAMES: "",
+      HOME_EMAILS: "",
+      HOME_USERNAMES: `maison${suffix}`,
+    },
+    stdio: ["ignore", "pipe", "pipe"],
+    detached: true,
+  });
+  server.stdout.on("data", (d) => (log += d));
+  server.stderr.on("data", (d) => (log += d));
+  let up = false;
+  for (let i = 0; i < 240 && !up; i++) {
+    await sleep(500);
+    if (server.exitCode !== null) break;
+    try {
+      up = (await fetch(BASE + "/api/me")).ok;
+    } catch {
+      /* pas encore prêt */
+    }
+  }
+  if (!up) {
+    console.log(log);
+    console.log("❌ le serveur de test n'a pas démarré");
+    process.exit(1);
+  }
+  console.log(`(serveur de test next dev sur ${BASE}, base ${dir})`);
+}
+
+/** Client HTTP ; avec un nom, il est connecté comme ce joueur de test (en-tête x-farima-test-user). */
+function client(name) {
   return async function call(path, body) {
     const res = await fetch(BASE + path, {
       method: body === undefined ? "GET" : "POST",
-      headers: { ...(body === undefined ? {} : { "Content-Type": "application/json" }), ...(cookie ? { cookie } : {}) },
+      headers: {
+        ...(body === undefined ? {} : { "Content-Type": "application/json" }),
+        ...(name ? { "x-farima-test-user": name } : {}),
+      },
       body: body === undefined ? undefined : JSON.stringify(body),
     });
-    const set = res.headers.get("set-cookie");
-    if (set) cookie = set.split(";")[0];
     let data = null;
     try {
       data = await res.json();
@@ -31,10 +105,10 @@ function client() {
   };
 }
 
-async function user(name, password = "secret123") {
-  const c = client();
-  const r = await c("/api/auth/register", { username: name, password });
-  ok(r.status === 200, `inscription ${name} (${r.status})`);
+async function user(name) {
+  const c = client(name);
+  const r = await c("/api/me");
+  ok(r.status === 200 && r.data?.user?.username === name, `inscription automatique de ${name} à la 1re visite (${r.status})`);
   return c;
 }
 
@@ -44,6 +118,28 @@ const me = async (c) => (await c("/api/me")).data.user;
 for (const p of ["/", "/inscription", "/connexion", "/tableau-de-bord", "/salon", "/jeu/x", "/pro", "/maison", "/paris", "/paris/match/demo%3Atest", "/paris/mes-paris", "/portefeuille", "/admin/paris"]) {
   const r = await fetch(BASE + p);
   ok(r.status === 200, `GET ${p} -> ${r.status}`);
+}
+
+// 1 bis. protection des comptes (Clerk)
+const anon = client();
+let a = await anon("/api/me");
+ok(a.status === 200 && a.data.user === null, "visiteur : /api/me -> user null");
+ok((await anon("/api/wallet")).status === 401, "visiteur : /api/wallet refusé (401)");
+ok((await anon("/api/paris/bets", { matchId: "x", market: "1x2", selection: "1", amount: 100 })).status === 401, "visiteur : pari refusé (401)");
+ok((await anon("/api/tables", { game: "awale", mode: "cpu", currency: "coris" })).status === 401, "visiteur : table de jeu refusée (401)");
+for (const old of ["/api/auth/register", "/api/auth/login"]) {
+  const r0 = await fetch(BASE + old, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ username: "x_" + suffix, password: "secret123" }) });
+  ok(r0.status === 404 || r0.status === 405, `ancienne route ${old} supprimée (${r0.status})`);
+}
+for (const p of ["/portefeuille", "/tableau-de-bord", "/paris/mes-paris", "/admin/paris"]) {
+  const r0 = await fetch(BASE + p, { redirect: "manual" });
+  const loc = r0.headers.get("location") ?? "";
+  ok(r0.status >= 300 && r0.status < 400 && loc.includes("/connexion") && loc.includes("redirect_url="), `visiteur : ${p} -> redirigé vers la connexion (${r0.status})`);
+}
+for (const p of ["/connexion", "/inscription", "/connexion/factor-one", "/inscription/verify-email-address"]) {
+  const r0 = await fetch(BASE + p);
+  const html = await r0.text();
+  ok(r0.status === 200 && html.includes("FarimaGame"), `page Clerk ${p} -> ${r0.status}`);
 }
 
 // 2. comptes
@@ -58,6 +154,10 @@ ok((await me(alice)).fcfa === 0 && (await me(alice)).coris === 500, "alice : 500
 ok((await alice("/api/house")).status === 403, "alice : /api/house interdit (403)");
 ok((await alice("/api/admin/paris")).status === 403, "alice : /api/admin/paris interdit (403)");
 ok((await admin("/api/house")).status === 200, "admin : /api/house autorisé");
+const maison = await user(`maison${suffix}`);
+ok((await me(maison)).role === "HOME", `rôle Maison = ${(await me(maison)).role}`);
+ok((await maison("/api/house")).status === 200, "Maison : /api/house autorisé");
+ok((await maison("/api/admin/paris")).status === 200, "Maison : suivi de l'argent des paris autorisé");
 
 // 3. dépôts simulés
 let r = await alice("/api/portefeuille", { action: "deposit", operator: "orange", phone: "07 07 07 07 07", amount: 10000 });
@@ -178,5 +278,12 @@ ok(r.status === 200 && r.data.id, "les jeux fonctionnent toujours (table Awalé 
 ok((await me(alice)).coris === 450, "mise de 50 Coris débitée");
 ok((await alice("/api/tables", { game: "awale", mode: "cpu", currency: "fcfa" })).status === 400, "pas de table en F CFA");
 
+// 10. une fiche joueur par compte (pas de doublon, pas de 2e bonus)
+await alice("/api/me");
+ok((await me(alice)).coris === 450, "2e visite d'alice : pas de nouveau bonus");
+const carolTwin = await user(`Carol_${suffix}`.toLowerCase());
+ok((await me(carolTwin)).id === (await me(carol)).id, "même compte -> même fiche joueur");
+
 console.log(failures === 0 ? "\n🎉 Tous les tests sont passés." : `\n⚠️ ${failures} test(s) en échec.`);
+
 process.exit(failures === 0 ? 0 : 1);

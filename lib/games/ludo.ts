@@ -187,10 +187,8 @@ export const ludo: Engine<LudoState, LudoMove> = {
       if (mv.length === 0) {
         log.push(`${names[seat]} ne peut pas jouer`);
         endTurn(s);
-      } else if (mv.length === 1 || new Set(mv.map((i) => s.tokens[seat][i])).size === 1) {
-        // un seul choix possible : coup automatique
-        moveToken(s, seat, mv[0], d, names, log);
       } else {
+        // Le joueur choisit lui-même le pion, même s'il n'y en a qu'un.
         s.phase = "move";
         s.dice = d;
       }

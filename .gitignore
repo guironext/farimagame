@@ -44,3 +44,17 @@ next-env.d.ts
 
 # base de données locale FarimaGame
 /data
+
+# Client Prisma généré
+/lib/generated
+
+# local data & backups
+/data/
+/.backups/
+*.tsbuildinfo
+
+# Clerk keyless mode (clés de développement temporaires générées automatiquement)
+/.clerk/
+
+# serveur de test (scripts/test-paris.mjs)
+/.next-test/

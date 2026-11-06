@@ -28,8 +28,13 @@ export interface UserRow {
   id: string;
   username: string;
   usernameLower: string;
-  passwordHash: string;
-  salt: string;
+  /** Identifiant du compte Clerk lié (« user_… ») ; « test:… » pour les comptes des tests automatiques. */
+  clerkId?: string;
+  /** E-mail principal du compte Clerk au moment de la création (sert à ADMIN_EMAILS). */
+  email?: string;
+  /** Anciens comptes à mot de passe (avant Clerk) : conservés dans la base mais ne peuvent plus se connecter. */
+  passwordHash?: string;
+  salt?: string;
   role: Role;
   level: Level;
   coris: number; // centièmes
@@ -99,6 +104,14 @@ export interface SeatRow {
   active: boolean;
 }
 
+export type InviteStatus = "pending" | "accepted" | "declined";
+
+export interface TableInvite {
+  userId: string;
+  username: string;
+  status: InviteStatus;
+}
+
 export interface TableRow {
   id: string;
   game: GameId;
@@ -108,6 +121,8 @@ export interface TableRow {
   maxPlayers: number;
   status: TableStatus;
   seats: SeatRow[];
+  /** Joueurs invités pour une partie à 2, 3 ou 4. Vide pour l'ordinateur et les anciennes tables ouvertes. */
+  invites?: TableInvite[];
   createdBy: string;
   createdAt: string;
   startedAt?: string;
@@ -222,10 +237,10 @@ function normalize(db: Db): Db {
   db.house.fcfa ??= 0;
   for (const u of db.users) {
     u.fcfa ??= 0;
-    if (u.role !== "ADMIN") u.role = "JOUEUR";
+    if (u.role !== "ADMIN" && u.role !== "HOME") u.role = "JOUEUR";
   }
-  // Le premier compte créé devient administrateur s'il n'y en a encore aucun.
-  if (db.users.length > 0 && !db.users.some((u) => u.role === "ADMIN")) db.users[0].role = "ADMIN";
+  for (const t of db.tables) t.invites ??= [];
+  // Le premier administrateur est désigné à la création du compte (voir provisionUser dans wallet.ts).
   return db;
 }
 

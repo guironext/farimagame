@@ -32,20 +32,28 @@ const sideSum = (pits: number[], seat: number) => {
   return t;
 };
 
-export function simulate(pits: number[], seat: number, pit: number) {
-  const p = pits.slice();
-  let seeds = p[pit];
-  p[pit] = 0;
+/** Trous qui reçoivent une graine, dans l'ordre du semis. Le trou de départ est sauté. */
+export function sowPath(pits: number[], pit: number): number[] {
+  const path: number[] = [];
+  let seeds = pits[pit] ?? 0;
   let i = pit;
   while (seeds > 0) {
     i = (i + 1) % 12;
     if (i === pit) continue;
-    p[i]++;
+    path.push(i);
     seeds--;
   }
+  return path;
+}
+
+export function simulate(pits: number[], seat: number, pit: number) {
+  const p = pits.slice();
+  const path = sowPath(p, pit);
+  p[pit] = 0;
+  for (const i of path) p[i]++;
   const opp = 1 - seat;
   const caps: number[] = [];
-  let j = i;
+  let j = path.length > 0 ? path[path.length - 1] : pit;
   while (own(opp, j) && (p[j] === 2 || p[j] === 3)) {
     caps.push(j);
     j--;

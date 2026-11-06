@@ -1,7 +1,6 @@
 import { CORIS_PER_LION, FCFA_PER_LION, SIGNUP_BONUS_CORIS, toUnits } from "../config";
 import type { Currency } from "../types";
-import { hashPassword, newSessionToken, SESSION_DAYS, verifyPassword } from "./auth";
-import { newId, nowIso, transact, type Db, type HouseTxRow, type TxRow, type UserRow } from "./db";
+import { newId, nowIso, readDb, transact, type Db, type HouseTxRow, type TxRow, type UserRow } from "./db";
 import { AppError } from "./errors";
 
 export const CURRENCY_LABEL: Record<Currency, string> = { coris: "Coris", lions: "Lions", fcfa: "F CFA" };
@@ -56,36 +55,56 @@ export function houseMove(
   db.house.ledger.push({ id: newId("h_"), type, currency, amount, tableId, matchId, label, createdAt: nowIso() });
 }
 
-function createSession(db: Db, userId: string) {
-  const token = newSessionToken();
-  const now = new Date();
-  db.sessions = db.sessions.filter((s) => new Date(s.expiresAt).getTime() > now.getTime());
-  db.sessions.push({
-    token,
-    userId,
-    createdAt: now.toISOString(),
-    expiresAt: new Date(now.getTime() + SESSION_DAYS * 86400000).toISOString(),
-  });
-  return token;
+/** Transforme un pseudo / prénom / e-mail en pseudo FarimaGame valide (3 à 20 caractères : lettres, chiffres, _ . -). */
+function cleanUsername(raw: string | null | undefined): string {
+  const s = String(raw ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^A-Za-z0-9_.-]+/g, "")
+    .slice(0, 20);
+  return s.length >= 3 ? s : "";
 }
 
-export function register(usernameRaw: unknown, passwordRaw: unknown) {
-  const username = String(usernameRaw ?? "").trim();
-  const password = String(passwordRaw ?? "");
-  if (!/^[A-Za-z0-9_.-]{3,20}$/.test(username))
-    throw new AppError(400, "Le pseudo doit faire 3 à 20 caractères (lettres, chiffres, _ . -).");
-  if (password.length < 6) throw new AppError(400, "Le mot de passe doit faire au moins 6 caractères.");
-  const { hash, salt } = hashPassword(password);
+function uniqueUsername(db: Db, base: string): string {
+  const taken = new Set(db.users.map((u) => u.usernameLower));
+  if (!taken.has(base.toLowerCase())) return base;
+  for (let i = 2; ; i++) {
+    const suffix = String(i);
+    const candidate = base.slice(0, 20 - suffix.length) + suffix;
+    if (!taken.has(candidate.toLowerCase())) return candidate;
+  }
+}
+
+export interface ExternalProfile {
+  username?: string | null;
+  firstName?: string | null;
+  email?: string | null;
+}
+
+/**
+ * Fiche joueur liée à un compte Clerk (clerkId). Créée à la première visite :
+ * rôle JOUEUR (ADMIN si aucun administrateur ne peut encore se connecter), niveau normal, 500 Coris de bienvenue.
+ * Pseudo : pseudo Clerk, sinon prénom, sinon début de l'e-mail, sinon « joueur » ; rendu unique (gerard, gerard2…).
+ */
+export function provisionUser(clerkId: string, profile: ExternalProfile): UserRow {
+  const found = readDb().users.find((u) => u.clerkId === clerkId);
+  if (found) return found;
   return transact((db) => {
-    if (db.users.some((u) => u.usernameLower === username.toLowerCase()))
-      throw new AppError(409, "Ce pseudo est déjà utilisé.");
+    const again = db.users.find((u) => u.clerkId === clerkId);
+    if (again) return again;
+    const email = profile.email?.trim().toLowerCase() || undefined;
+    const base =
+      cleanUsername(profile.username) || cleanUsername(profile.firstName) || cleanUsername(email?.split("@")[0]) || "joueur";
+    const username = uniqueUsername(db, base);
+    // Les anciens comptes à mot de passe ne peuvent plus se connecter : seul un admin relié à Clerk compte.
+    const hasActiveAdmin = db.users.some((u) => u.role === "ADMIN" && u.clerkId);
     const user: UserRow = {
       id: newId("u_"),
+      clerkId,
+      email,
       username,
       usernameLower: username.toLowerCase(),
-      passwordHash: hash,
-      salt,
-      role: db.users.length === 0 ? "ADMIN" : "JOUEUR", // le premier compte créé est administrateur
+      role: hasActiveAdmin ? "JOUEUR" : "ADMIN",
       level: "normal",
       coris: 0,
       lions: 0,
@@ -94,25 +113,7 @@ export function register(usernameRaw: unknown, passwordRaw: unknown) {
     };
     db.users.push(user);
     walletMove(db, user, "coris", toUnits(SIGNUP_BONUS_CORIS), "bonus", "Bonus de bienvenue");
-    return { token: createSession(db, user.id), user };
-  });
-}
-
-export function login(usernameRaw: unknown, passwordRaw: unknown) {
-  const username = String(usernameRaw ?? "").trim().toLowerCase();
-  const password = String(passwordRaw ?? "");
-  return transact((db) => {
-    const user = db.users.find((u) => u.usernameLower === username);
-    if (!user || !verifyPassword(password, user.salt, user.passwordHash))
-      throw new AppError(401, "Pseudo ou mot de passe incorrect.");
-    return { token: createSession(db, user.id), user };
-  });
-}
-
-export function logout(token: string | null) {
-  if (!token) return;
-  transact((db) => {
-    db.sessions = db.sessions.filter((s) => s.token !== token);
+    return user;
   });
 }
 

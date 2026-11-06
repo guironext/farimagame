@@ -21,6 +21,30 @@ npm start          # http://localhost:3000
 Pour jouer à plusieurs depuis d'autres appareils du même réseau Wi-Fi : `npm run dev -- -H 0.0.0.0`
 puis ouvrez `http://<adresse-ip-du-mac>:3000` sur les autres appareils.
 
+## Connexion et inscription (Clerk)
+
+Les comptes, mots de passe et sessions sont gérés par [Clerk](https://clerk.com) (pages `/connexion` et `/inscription`,
+en français, aux couleurs de FarimaGame ; menu « Mon compte et sécurité » et déconnexion dans la barre du haut).
+
+- **Sans clés (développement)** : `npm run dev` fonctionne tout de suite. Clerk crée une application de test temporaire
+  (« keyless mode ») dont les clés sont rangées dans `.clerk/` (ignoré par git). Le terminal affiche un lien
+  `https://dashboard.clerk.com/apps/claim?...` : ouvrez-le et connectez-vous à Clerk pour **récupérer cette application**
+  (sinon elle expire et les comptes de test sont perdus).
+- **Avec vos clés** : sur https://dashboard.clerk.com → votre application → *API keys*, copiez les deux clés dans
+  `.env.local` puis relancez le serveur :
+  ```
+  NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_...
+  CLERK_SECRET_KEY=sk_test_...
+  ADMIN_EMAILS=vous@exemple.com
+  ```
+  Ces clés sont **obligatoires en production** (`npm run build` + `npm start`) : sans elles, la connexion est désactivée.
+- **Fiche joueur** : à la première visite d'un compte Clerk connecté, FarimaGame crée automatiquement sa fiche dans
+  `data/db.json` (rôle JOUEUR, **500 Coris** de bienvenue, pseudo tiré du pseudo Clerk, sinon du prénom, sinon du début
+  de l'e-mail, rendu unique : gerard, gerard2…), reliée au compte par `clerkId`. Portefeuilles, paris et parties ne changent pas.
+- **Anciens comptes à mot de passe** : conservés dans la base (soldes et historique), mais ils ne peuvent plus se connecter.
+- Pages réservées (`/tableau-de-bord`, `/portefeuille`, `/pro`, `/salon`, `/jeu`, `/paris/mes-paris`, `/maison`, `/admin`) :
+  un visiteur est redirigé vers `/connexion` par `proxy.ts` ; les API renvoient 401 / 403.
+
 ## Pages
 
 | Page | Adresse |
@@ -77,9 +101,10 @@ Tous les paramètres sont dans `lib/config.ts`.
 
 - **JOUEUR** : rôle par défaut.
 - **ADMIN** : accès à `/admin/paris` (règlement des matchs, retraits, commissions) et à `/maison`.
-  - Par défaut, **le premier compte créé** dans la base devient ADMIN (y compris dans une base existante).
-  - Ou bien, définissez la variable d'environnement `ADMIN_USERNAMES` (pseudos séparés par des virgules) :
-    `ADMIN_USERNAMES=gerard,moussa npm run dev`. Dans ce cas, **seuls** ces comptes sont ADMIN.
+  - Recommandé : `ADMIN_EMAILS=vous@exemple.com,associe@exemple.com` dans `.env.local` (e-mails des comptes Clerk).
+    On peut aussi utiliser `ADMIN_USERNAMES` (pseudos FarimaGame). Si l'une de ces variables est définie, **seuls** ces comptes sont ADMIN.
+  - Sinon, le **premier compte Clerk** qui se connecte devient ADMIN s'il n'existe encore aucun administrateur relié à Clerk
+    (l'ancien admin à mot de passe ne compte pas, puisqu'il ne peut plus se connecter).
 
 ## Portefeuille F CFA (XOF)
 
@@ -217,7 +242,9 @@ cotes FarimaGame en attendant. La clé n'est jamais affichée ni écrite dans la
 | `BET_MIN_FCFA` / `BET_MAX_FCFA` | 100 / 100 000 | Limites d'une mise |
 | `BET_WINNERS_SHARE` / `BET_HOUSE_SHARE` | 90 % / 10 % | Partage du pot des paris sportifs (`BET_WINNERS_SHARE` réglable par variable d’environnement) |
 | `PAYMENT_PROVIDER` | `simulation` | Fournisseur de paiement |
-| `ADMIN_USERNAMES` | (vide) | Comptes administrateurs |
+| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` / `CLERK_SECRET_KEY` | (vide = keyless en dev) | Clés Clerk (connexion / inscription) |
+| `ADMIN_EMAILS` | (vide) | E-mails des comptes administrateurs (Clerk) |
+| `ADMIN_USERNAMES` | (vide) | Pseudos des comptes administrateurs |
 | `API_FOOTBALL_KEY` | (vide) | Active les vrais matchs |
 | `ODDS_API_KEY` | (vide) | Active les vraies cotes bookmakers (The Odds API) |
 | `ODDS_API_REFRESH_MINUTES` | 15 | Délai minimal entre deux rafraîchissements des cotes |
@@ -236,10 +263,13 @@ cotes FarimaGame en attendant. La clé n'est jamais affichée ni écrite dans la
 ## Test de bout en bout des paris
 
 ```bash
-npm run build
-FARIMA_DATA_DIR=/tmp/farima-test npx next start -p 3100   # base de test séparée (le 1er compte y devient ADMIN)
-node scripts/test-paris.mjs http://localhost:3100          # dans un autre terminal
+node scripts/test-paris.mjs
 ```
+
+Le script lance lui-même un serveur `next dev` de test (port 3100, base temporaire, dossier `.next-test`) à côté de votre
+`npm run dev`. Les comptes de test s'y connectent par l'en-tête `x-farima-test-user` au lieu de Clerk : ce raccourci
+n'existe qu'en développement avec `FARIMA_TEST_AUTH=1` **et** une base `FARIMA_DATA_DIR` séparée, et il est retiré du code
+par `next build` (impossible à utiliser en production).
 
 Test des cotes (lance lui-même des serveurs de test avec une base temporaire et un faux serveur The Odds API) :
 
@@ -275,7 +305,7 @@ table depuis le salon ; l'état de la partie est synchronisé par interrogation 
 
 ```
 app/                 pages + API (route handlers)
-  api/auth/*         inscription, connexion, déconnexion (cookie de session httpOnly)
+  connexion, inscription   écrans Clerk <SignIn/> / <SignUp/> (routes [[...rest]])
   api/me             utilisateur connecté + configuration
   api/wallet         historique et statistiques
   api/pro            passage Pro et conversion
@@ -294,12 +324,14 @@ lib/odds/            modèle de cotes FarimaGame (model.ts), notes des équipes 
 lib/server/odds.ts   cotes de référence d'un match + cache / planification des appels à The Odds API
 scripts/             tests de bout en bout des paris (test-paris.mjs) et des cotes (test-odds.mjs + fixtures/)
 lib/config.ts        paramètres économiques
+lib/clerk.ts         réglages Clerk (pages réservées, URLs) ; lib/clerk-appearance.ts : thème et textes FR
+proxy.ts             session Clerk + redirection des pages réservées vers /connexion
 data/db.json         base de données locale (créée automatiquement, ignorée par git)
 ```
 
 - **Stockage** : un fichier JSON (`data/db.json`) écrit de façon atomique ; aucun module natif requis.
   Pour repartir de zéro, arrêtez le serveur et supprimez le dossier `data/`.
-- **Mots de passe** hachés avec scrypt (sel aléatoire), sessions de 30 jours en cookie httpOnly.
+- **Comptes** : Clerk (mots de passe, e-mails, sessions) ; la fiche joueur locale est reliée par `clerkId` (`lib/server/auth.ts`).
 
 ## Limites connues / pistes
 

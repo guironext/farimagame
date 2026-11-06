@@ -1,0 +1,376 @@
+// Schéma PostgreSQL de FarimaGame.
+// Les montants (coris, lions, fcfa, mises, gains) sont en centièmes, comme dans lib/server/db.ts.
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../lib/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  JOUEUR
+  ADMIN
+  HOME
+}
+
+enum Level {
+  normal
+  pro
+}
+
+enum Currency {
+  coris
+  lions
+  fcfa
+}
+
+enum GameCurrency {
+  coris
+  lions
+}
+
+enum GameId {
+  ludo
+  dames
+  awale
+  echecs
+}
+
+enum GameMode {
+  cpu
+  two   @map("2")
+  three @map("3")
+  four  @map("4")
+}
+
+enum TableStatus {
+  waiting
+  playing
+  finished
+  cancelled
+}
+
+enum MatchSource {
+  demo
+  apiFootball @map("api-football")
+  manuel
+}
+
+enum MatchStatus {
+  scheduled
+  live
+  finished
+  postponed
+  cancelled
+}
+
+enum MarketId {
+  oneN2 @map("1N2")
+  BTTS
+  OU25
+}
+
+enum Selection {
+  home @map("1")
+  draw @map("N")
+  away @map("2")
+  oui
+  non
+  plus
+  moins
+}
+
+enum BetStatus {
+  pending
+  won
+  lost
+  refunded
+}
+
+enum TxType {
+  bonus
+  mise
+  gain
+  nul
+  remboursement
+  conversion_debit
+  conversion_credit
+  depot
+  retrait
+  retrait_annule
+  pari
+  gain_pari
+  remboursement_pari
+}
+
+enum HouseTxType {
+  commission
+  mise_ordinateur
+  gain_ordinateur
+  nul_ordinateur
+  remboursement_ordinateur
+  commission_pari
+  arrondi_pari
+}
+
+enum PaymentKind {
+  depot
+  retrait
+}
+
+enum PaymentStatus {
+  pending
+  completed
+  failed
+  rejected
+}
+
+enum MobileOperator {
+  orange
+  mtn
+  wave
+  moov
+}
+
+model User {
+  id            String    @id
+  username      String
+  usernameLower String    @unique @map("username_lower")
+  clerkId       String?   @unique @map("clerk_id")
+  email         String?
+  passwordHash  String?   @map("password_hash")
+  salt          String?
+  role          Role      @default(JOUEUR)
+  level         Level     @default(normal)
+  coris         Int       @default(0)
+  lions         Int       @default(0)
+  fcfa          Int       @default(0)
+  createdAt     DateTime  @map("created_at")
+  proSince      DateTime? @map("pro_since")
+
+  sessions     Session[]
+  transactions Transaction[]
+  bets         Bet[]
+  payments     Payment[]
+  tables       GameTable[]
+  seats        Seat[]
+
+  @@map("users")
+}
+
+model Session {
+  token     String   @id
+  userId    String   @map("user_id")
+  createdAt DateTime @map("created_at")
+  expiresAt DateTime @map("expires_at")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+model Transaction {
+  id           String   @id
+  userId       String   @map("user_id")
+  type         TxType
+  currency     Currency
+  amount       Int
+  balanceAfter Int      @map("balance_after")
+  tableId      String?  @map("table_id")
+  matchId      String?  @map("match_id")
+  paymentId    String?  @map("payment_id")
+  label        String
+  createdAt    DateTime @map("created_at")
+
+  user    User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  table   GameTable? @relation(fields: [tableId], references: [id], onDelete: SetNull)
+  match   Match?     @relation(fields: [matchId], references: [id], onDelete: SetNull)
+  payment Payment?   @relation(fields: [paymentId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@index([tableId])
+  @@index([matchId])
+  @@map("transactions")
+}
+
+/// Caisse de la maison. Une seule ligne, id = "house".
+model HouseAccount {
+  id     String @id @default("house")
+  coris  Int    @default(0)
+  lions  Int    @default(0)
+  fcfa   Int    @default(0)
+  ledger HouseLedger[]
+
+  @@map("house_accounts")
+}
+
+model HouseLedger {
+  id        String      @id
+  houseId   String      @default("house") @map("house_id")
+  type      HouseTxType
+  currency  Currency
+  amount    Int
+  tableId   String?     @map("table_id")
+  matchId   String?     @map("match_id")
+  label     String
+  createdAt DateTime    @map("created_at")
+
+  house HouseAccount @relation(fields: [houseId], references: [id], onDelete: Cascade)
+  table GameTable?   @relation(fields: [tableId], references: [id], onDelete: SetNull)
+  match Match?       @relation(fields: [matchId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt])
+  @@map("house_ledger")
+}
+
+model GameTable {
+  id          String       @id
+  game        GameId
+  mode        GameMode
+  currency    GameCurrency
+  stake       Int
+  maxPlayers  Int          @map("max_players")
+  status      TableStatus
+  createdById String       @map("created_by")
+  createdAt   DateTime     @map("created_at")
+  startedAt   DateTime?    @map("started_at")
+  finishedAt  DateTime?    @map("finished_at")
+  lastMoveAt  DateTime?    @map("last_move_at")
+  winnerSeat  Int?         @map("winner_seat")
+  isDraw      Boolean      @default(false) @map("is_draw")
+  pot         Int          @default(0)
+  payout      Int          @default(0)
+  commission  Int          @default(0)
+  state       Json
+  log         String[]
+  version     Int          @default(0)
+
+  createdBy    User          @relation(fields: [createdById], references: [id])
+  seats        Seat[]
+  transactions Transaction[]
+  houseLedger  HouseLedger[]
+
+  @@index([status, game])
+  @@map("game_tables")
+}
+
+model Seat {
+  tableId  String  @map("table_id")
+  seat     Int
+  userId   String? @map("user_id")
+  username String
+  isCpu    Boolean @map("is_cpu")
+  active   Boolean @default(true)
+
+  table GameTable @relation(fields: [tableId], references: [id], onDelete: Cascade)
+  user  User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@id([tableId, seat])
+  @@index([userId])
+  @@map("seats")
+}
+
+model Match {
+  id            String      @id
+  source        MatchSource
+  competitionId String      @map("competition_id")
+  home          String
+  away          String
+  homeLogo      String?     @map("home_logo")
+  awayLogo      String?     @map("away_logo")
+  kickoff       DateTime
+  status        MatchStatus
+  homeScore     Int?        @map("home_score")
+  awayScore     Int?        @map("away_score")
+  live          Json?
+  round         String?
+  venue         String?
+  manual        Boolean     @default(false)
+  settledAt     DateTime?   @map("settled_at")
+  settlement    Json?
+  updatedAt     DateTime    @map("updated_at")
+
+  bets         Bet[]
+  transactions Transaction[]
+  houseLedger  HouseLedger[]
+
+  @@index([status, kickoff])
+  @@index([competitionId])
+  @@map("matches")
+}
+
+model Bet {
+  id        String    @id
+  userId    String    @map("user_id")
+  matchId   String    @map("match_id")
+  market    MarketId
+  selection Selection
+  stake     Int
+  status    BetStatus
+  payout    Int       @default(0)
+  note      String?
+  createdAt DateTime  @map("created_at")
+  settledAt DateTime? @map("settled_at")
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  match Match @relation(fields: [matchId], references: [id], onDelete: Restrict)
+
+  @@index([userId, createdAt])
+  @@index([matchId, status])
+  @@map("bets")
+}
+
+model Payment {
+  id          String         @id
+  userId      String         @map("user_id")
+  kind        PaymentKind
+  operator    MobileOperator
+  phone       String
+  amount      Int
+  status      PaymentStatus
+  provider    String
+  providerRef String?        @map("provider_ref")
+  message     String?
+  createdAt   DateTime       @map("created_at")
+  updatedAt   DateTime       @map("updated_at")
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions Transaction[]
+
+  @@index([userId, createdAt])
+  @@map("payments")
+}
+
+/// Suivi de la synchro API-Football. Une seule ligne, id = "default".
+model SportsSync {
+  id             String    @id @default("default")
+  provider       String?
+  lastSyncAt     DateTime? @map("last_sync_at")
+  lastError      String?   @map("last_error")
+  lastLiveAt     DateTime? @map("last_live_at")
+  lastLiveError  String?   @map("last_live_error")
+  quotaDay       String?   @map("quota_day")
+  quotaUsed      Int?      @map("quota_used")                                                                                                                                                                          
+  quotaRemaining Int?      @map("quota_remaining")
+  quotaLimit     Int?      @map("quota_limit")
+
+  @@map("sports_sync")
+}
+
+/// Cache des cotes bookmakers. Une seule ligne, id = "default".
+model OddsSnapshot {
+  id        String    @id @default("default")
+  events    Json      @default("[]")
+  fetchedAt DateTime? @map("fetched_at")
+  nextAt    DateTime? @map("next_at")
+  remaining Int?
+  used      Int?
+  lastError String?   @map("last_error")
+  status    String?
+  sports    String[]  @default([])
+
+  @@map("odds_snapshots")
+}

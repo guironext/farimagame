@@ -107,7 +107,7 @@ export function AdminOnly() {
     <div className="mx-auto max-w-lg py-16 text-center">
       <div className="text-5xl">🔒</div>
       <h1 className="mt-4 text-2xl font-bold">Accès réservé</h1>
-      <p className="mt-2 text-sm text-slate-400">Cette page est réservée aux administrateurs de FarimaGame.</p>
+      <p className="mt-2 text-sm text-slate-400">Cette page est réservée à la Maison et aux administrateurs de FarimaGame.</p>
       <ButtonLink href="/tableau-de-bord" variant="ghost" className="mt-6">
         Retour au tableau de bord
       </ButtonLink>
@@ -140,7 +140,7 @@ export function useRequireAuth() {
   const s = useSession();
   const router = useRouter();
   useEffect(() => {
-    if (!s.loading && !s.me) router.replace("/connexion");
+    if (!s.loading && !s.me) router.replace(`/connexion?redirect_url=${encodeURIComponent(window.location.pathname + window.location.search)}`);
   }, [s.loading, s.me, router]);
   return s;
 }

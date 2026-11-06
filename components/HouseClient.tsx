@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { api, fmtDate } from "@/lib/client";
-import type { Currency } from "@/lib/types";
+import { canManageMoney, type Currency } from "@/lib/types";
 import { AdminOnly, Card, Money, PageTitle, Spinner, cx, useRequireAuth } from "./ui";
 
 interface HouseData {
@@ -17,9 +17,9 @@ export function HouseClient() {
   const { me, loading } = useRequireAuth();
   const [data, setData] = useState<HouseData | null>(null);
   useEffect(() => {
-    if (me?.role === "ADMIN") api<HouseData>("/api/house").then(setData).catch(() => {});
+    if (me && canManageMoney(me.role)) api<HouseData>("/api/house").then(setData).catch(() => {});
   }, [me]);
-  if (!loading && me && me.role !== "ADMIN") return <AdminOnly />;
+  if (!loading && me && !canManageMoney(me.role)) return <AdminOnly />;
   if (loading || !me || !data) return <Spinner />;
   return (
     <div className="space-y-6">

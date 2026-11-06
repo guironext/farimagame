@@ -5,7 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import { MARKET_BY_ID, selectionLabel } from "@/lib/betting";
 import { api, fmtDate, idParam } from "@/lib/client";
 import { formatPhone, operatorName } from "@/lib/payments/types";
-import type { MarketId, MatchView, PaymentView, Selection } from "@/lib/types";
+import { canManageMoney, type MarketId, type MatchView, type PaymentView, type Selection } from "@/lib/types";
 import { AdminOnly, Alert, Button, Card, Money, PageTitle, Spinner, Tabs, cx, useRequireAuth } from "../ui";
 import { DemoBanner, StatusBadge } from "./shared";
 
@@ -38,17 +38,17 @@ export function AdminParisClient() {
   const [msg, setMsg] = useState<{ kind: "error" | "success"; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const isAdmin = me?.role === "ADMIN";
+  const canMoney = !!me && canManageMoney(me.role);
   const load = useCallback(() => api<AdminData>("/api/admin/paris").then(setData).catch((e) => setMsg({ kind: "error", text: (e as Error).message })), []);
 
   useEffect(() => {
-    if (!isAdmin) return;
+    if (!canMoney) return;
     load();
     const t = setInterval(load, 15000);
     return () => clearInterval(t);
-  }, [isAdmin, load]);
+  }, [canMoney, load]);
 
-  if (!loading && me && !isAdmin) return <AdminOnly />;
+  if (!loading && me && !canMoney) return <AdminOnly />;
   if (loading || !me || !data) return <Spinner />;
 
   async function act(body: Record<string, unknown>, ok: string) {

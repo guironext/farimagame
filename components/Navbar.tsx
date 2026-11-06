@@ -1,10 +1,11 @@
 "use client";
 
+import { UserButton, useClerk } from "@clerk/nextjs";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Suspense, useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { api } from "@/lib/client";
+import { CLERK_ENABLED } from "@/lib/clerk";
 import { useSession } from "./SessionProvider";
 import {
   IconBall,
@@ -19,6 +20,7 @@ import {
   IconUser,
   IconWallet,
 } from "./icons";
+import { canManageMoney } from "@/lib/types";
 import { Money, cx } from "./ui";
 
 /** Lien actif : correspondance exacte pour "/", sinon préfixe (sans que /paris active /paris/mes-paris). */
@@ -101,15 +103,15 @@ function DesktopNav({ pathname }: { pathname: string | null }) {
           </Link>
         );
       })}
-      {me?.role === "ADMIN" && (
+      {me && canManageMoney(me.role) && (
         <Link
-          href="/admin/paris"
+          href={me.role === "HOME" ? "/maison" : "/admin/paris"}
           className={cx(
             "whitespace-nowrap rounded-xl px-3 py-2 text-sm font-medium transition",
             isActive(pathname, "/admin") || isActive(pathname, "/maison") ? "bg-white/[0.07] text-white" : "text-slate-400 hover:bg-white/5 hover:text-white",
           )}
         >
-          Admin
+          {me.role === "HOME" ? "Maison" : "Admin"}
         </Link>
       )}
     </nav>
@@ -137,8 +139,8 @@ function AccountArea() {
     };
   }, [open]);
 
-  async function logout() {
-    await api("/api/auth/logout", {}).catch(() => {});
+  /** Après la déconnexion Clerk (ou sans Clerk) : on vide la session locale et on revient à l'accueil. */
+  function afterLogout() {
     setMe(null);
     setOpen(false);
     router.push("/");
@@ -163,31 +165,37 @@ function AccountArea() {
   }
 
   const isAdmin = me.role === "ADMIN";
+  const isHome = me.role === "HOME";
   const menu = [
     { href: "/tableau-de-bord", label: "Tableau de bord", icon: IconChart },
     { href: "/portefeuille", label: "Portefeuille", icon: IconWallet },
     { href: "/paris/mes-paris", label: "Mes paris", icon: IconTicket },
     { href: "/pro", label: me.level === "pro" ? "Niveau Pro (actif)" : "Passer Pro", icon: IconCrown },
-    ...(isAdmin
+    ...(canManageMoney(me.role)
       ? [
-          { href: "/admin/paris", label: "Admin paris", icon: IconShield },
+          { href: "/admin/paris", label: isHome ? "Argent des paris" : "Admin paris", icon: IconShield },
           { href: "/maison", label: "La Maison", icon: IconShield },
         ]
       : []),
   ];
 
   return (
-    <div ref={ref} className="relative">
+    <div ref={ref} className="relative flex items-center gap-2">
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
         aria-haspopup="menu"
-        className="flex h-10 items-center gap-2 rounded-full border border-line bg-white/[0.04] pl-1.5 pr-2.5 text-sm transition hover:border-line-strong"
+        className={cx(
+          "flex h-10 items-center gap-2 rounded-full border border-line bg-white/[0.04] pr-2.5 text-sm transition hover:border-line-strong",
+          CLERK_ENABLED ? "pl-3" : "pl-1.5",
+        )}
       >
-        <span className="bg-brand-gradient flex h-7 w-7 items-center justify-center rounded-full text-xs font-extrabold uppercase text-slate-950">
-          {me.username.slice(0, 1)}
-        </span>
+        {!CLERK_ENABLED && (
+          <span className="bg-brand-gradient flex h-7 w-7 items-center justify-center rounded-full text-xs font-extrabold uppercase text-slate-950">
+            {me.username.slice(0, 1)}
+          </span>
+        )}
         <span className="flex items-center gap-2 text-[13px] leading-none">
           <Money amount={me.coris} currency="coris" className="text-amber-300" />
           {me.level === "pro" && <Money amount={me.lions} currency="lions" className="hidden text-fuchsia-300 sm:inline-flex" />}
@@ -206,6 +214,7 @@ function AccountArea() {
             <div className="text-xs text-slate-400">
               {me.level === "pro" ? "Joueur Pro 🦁" : "Joueur"}
               {isAdmin && " · Administrateur"}
+              {isHome && " · Maison"}
             </div>
           </div>
           <div className="grid grid-cols-3 gap-1.5 px-1 pb-2">
@@ -232,19 +241,62 @@ function AccountArea() {
                 {m.label}
               </Link>
             ))}
-            <button
-              type="button"
-              role="menuitem"
-              onClick={logout}
-              className="flex min-h-11 w-full items-center gap-3 rounded-xl px-3 text-left text-sm text-rose-300 hover:bg-rose-500/10"
-            >
-              <IconLogout className="h-[18px] w-[18px]" />
-              Déconnexion
-            </button>
+            {CLERK_ENABLED ? (
+              <ClerkAccountItems onAccount={() => setOpen(false)} onLoggedOut={afterLogout} />
+            ) : (
+              <LogoutItem onClick={afterLogout} />
+            )}
           </div>
         </div>
       )}
+
+      {CLERK_ENABLED && (
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center">
+          <UserButton appearance={{ elements: { avatarBox: { width: "2rem", height: "2rem" } } }} />
+        </div>
+      )}
     </div>
+  );
+}
+
+function LogoutItem({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      role="menuitem"
+      onClick={onClick}
+      className="flex min-h-11 w-full items-center gap-3 rounded-xl px-3 text-left text-sm text-rose-300 hover:bg-rose-500/10"
+    >
+      <IconLogout className="h-[18px] w-[18px]" />
+      Déconnexion
+    </button>
+  );
+}
+
+/** Entrées du menu gérées par Clerk : profil / sécurité du compte et déconnexion. */
+function ClerkAccountItems({ onAccount, onLoggedOut }: { onAccount: () => void; onLoggedOut: () => void }) {
+  const clerk = useClerk();
+  return (
+    <>
+      <button
+        type="button"
+        role="menuitem"
+        onClick={() => {
+          onAccount();
+          clerk.openUserProfile();
+        }}
+        className="flex min-h-11 w-full items-center gap-3 rounded-xl px-3 text-left text-sm text-slate-200 hover:bg-white/5"
+      >
+        <IconUser className="h-[18px] w-[18px] text-slate-400" />
+        Mon compte et sécurité
+      </button>
+      <LogoutItem
+        onClick={async () => {
+          await clerk.signOut().catch(() => {});
+          onLoggedOut();
+        }}
+      />
+    </>
   );
 }
 

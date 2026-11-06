@@ -4,7 +4,10 @@ export type GameCurrency = "coris" | "lions";
 export type GameId = "ludo" | "dames" | "awale" | "echecs";
 export type Mode = "cpu" | "2" | "3" | "4";
 export type Level = "normal" | "pro";
-export type Role = "JOUEUR" | "ADMIN";
+export type Role = "JOUEUR" | "ADMIN" | "HOME";
+
+/** Caisse, commissions, dépôts, retraits et règlement des mises. */
+export const canManageMoney = (role: Role) => role === "HOME" || role === "ADMIN";
 
 export interface PublicUser {
   id: string;
@@ -37,6 +40,13 @@ export interface SeatView {
 }
 
 export type TableStatus = "waiting" | "playing" | "finished" | "cancelled";
+export type InviteStatus = "pending" | "accepted" | "declined";
+
+export interface TableInviteView {
+  userId: string;
+  username: string;
+  status: InviteStatus;
+}
 
 export interface TableView {
   id: string;
@@ -47,6 +57,7 @@ export interface TableView {
   maxPlayers: number;
   status: TableStatus;
   seats: SeatView[];
+  invites: TableInviteView[];
   createdBy: string;
   createdAt: string;
   startedAt?: string;

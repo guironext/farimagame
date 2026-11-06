@@ -7,7 +7,7 @@ import { api, fmtAmount } from "@/lib/client";
 import { GAMES, GAME_LIST, modeLabel, modePlayers } from "@/lib/games/meta";
 import type { Currency, GameId, Mode, TableView } from "@/lib/types";
 import { useSession } from "./SessionProvider";
-import { Alert, Button, Card, Money, PageTitle, Spinner, cx, useRequireAuth } from "./ui";
+import { Alert, Button, ButtonLink, Card, Money, PageTitle, Spinner, cx, useRequireAuth } from "./ui";
 
 export function LobbyClient() {
   const { me, loading, config } = useRequireAuth();
@@ -16,9 +16,12 @@ export function LobbyClient() {
   const [game, setGame] = useState<GameId>("awale");
   const [mode, setMode] = useState<Mode>("cpu");
   const [currency, setCurrency] = useState<Currency>("coris");
-  const [lists, setLists] = useState<{ open: TableView[]; mine: TableView[] } | null>(null);
+  const [lists, setLists] = useState<{ open: TableView[]; mine: TableView[]; invites: TableView[] } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [picked, setPicked] = useState<{ id: string; username: string }[]>([]);
+  const [query, setQuery] = useState("");
+  const [roster, setRoster] = useState<{ id: string; username: string; level: string }[]>([]);
 
   useEffect(() => {
     const g = new URLSearchParams(window.location.search).get("jeu") as GameId | null;
@@ -42,6 +45,30 @@ export function LobbyClient() {
     return () => clearInterval(t);
   }, [me, load]);
 
+  useEffect(() => {
+    const allowed = GAMES[game].modes.includes(mode) ? mode : "cpu";
+    const need = allowed === "cpu" ? 0 : modePlayers(allowed) - 1;
+    setPicked((prev) => (prev.length > need ? prev.slice(0, need) : prev));
+  }, [game, mode]);
+
+  useEffect(() => {
+    if (!me) return;
+    const allowed = GAMES[game].modes.includes(mode) ? mode : "cpu";
+    if (allowed === "cpu") return;
+    const tableCurrency = me.level === "pro" && currency === "lions" ? "lions" : "coris";
+    let cancel = false;
+    api<{ players: { id: string; username: string; level: string }[] }>(`/api/joueurs?currency=${tableCurrency}`)
+      .then((r) => {
+        if (!cancel) setRoster(r.players);
+      })
+      .catch(() => {
+        if (!cancel) setRoster([]);
+      });
+    return () => {
+      cancel = true;
+    };
+  }, [me, game, mode, currency]);
+
   if (loading || !me || !config) return <Spinner />;
 
   const meta = GAMES[game];
@@ -50,19 +77,47 @@ export function LobbyClient() {
   const cur: Currency = isPro ? currency : "coris";
   const stake = cur === "coris" ? config.STAKE_CORIS : config.PRO_STAKE_LIONS;
   const players = modePlayers(effectiveMode);
+  const inviteCount = effectiveMode === "cpu" ? 0 : players - 1;
   const pot = stake * players;
   const prize = pot * config.WINNER_SHARE;
   const balance = cur === "coris" ? me.coris : me.lions;
+  const invitations = lists?.invites ?? [];
+  const shown = roster.filter((p) => p.username.toLowerCase().includes(query.trim().toLowerCase()));
+
+  function pickPlayer(player: { id: string; username: string }) {
+    setPicked((prev) => (prev.some((p) => p.id === player.id) || prev.length >= inviteCount ? prev : [...prev, player]));
+    setQuery("");
+  }
 
   async function create() {
     setBusy(true);
     setError(null);
     try {
-      const r = await api<{ id: string }>("/api/tables", { game, mode: effectiveMode, currency: cur });
+      const r = await api<{ id: string }>("/api/tables", {
+        game,
+        mode: effectiveMode,
+        currency: cur,
+        invites: picked.map((p) => p.username),
+      });
       await refresh();
       router.push(`/jeu/${r.id}`);
     } catch (e) {
       setError((e as Error).message);
+      setBusy(false);
+    }
+  }
+
+  async function answer(id: string, action: "join" | "decline") {
+    setBusy(true);
+    setError(null);
+    try {
+      await api(`/api/tables/${id}`, { action });
+      await refresh();
+      if (action === "join") router.push(`/jeu/${id}`);
+      else await load();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
       setBusy(false);
     }
   }
@@ -86,6 +141,36 @@ export function LobbyClient() {
   return (
     <div className="space-y-8">
       <PageTitle title="Salon de jeu" subtitle="Choisissez un jeu, un mode et lancez une partie." />
+
+      {!isPro && <SalonProCta />}
+
+      {invitations.length > 0 && (
+        <Card className="border-emerald-400/30">
+          <h2 className="mb-3 font-semibold">Invitations reçues</h2>
+          <div className="space-y-3">
+            {invitations.map((t) => (
+              <div key={t.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-white/5 px-3 py-3">
+                <div className="text-sm">
+                  <div className="font-semibold">
+                    {GAMES[t.game].emoji} {GAMES[t.game].name} · {modeLabel(t.mode)}
+                  </div>
+                  <div className="text-slate-400">
+                    {t.seats[0]?.username} vous invite · mise <Money amount={t.stake} currency={t.currency} /> · le vainqueur remporte 80 %
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <Button disabled={busy || (t.currency === "lions" && !isPro)} onClick={() => answer(t.id, "join")}>
+                    Accepter
+                  </Button>
+                  <Button variant="ghost" disabled={busy} onClick={() => answer(t.id, "decline")}>
+                    Refuser
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
 
       {active.length > 0 && (
         <Card className="border-amber-400/30">
@@ -171,6 +256,68 @@ export function LobbyClient() {
         </section>
       </div>
 
+      {inviteCount > 0 && (
+        <section>
+          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-400">
+            4. Inviter {inviteCount} joueur{inviteCount > 1 ? "s" : ""}
+          </h2>
+          <Card>
+            <p className="mb-3 text-sm text-slate-300">
+              La partie commence seulement quand {inviteCount === 1 ? "ce joueur accepte" : "ces joueurs acceptent"}. Le plateau apparaît alors, et le vainqueur remporte 80 % du pot.
+            </p>
+            <div className="mb-3 flex flex-wrap gap-2">
+              {picked.map((p) => (
+                <button
+                  key={p.id}
+                  type="button"
+                  className="rounded-full border border-amber-300/50 bg-amber-300/10 px-3 py-1 text-sm"
+                  onClick={() => setPicked((prev) => prev.filter((x) => x.id !== p.id))}
+                >
+                  {p.username} ×
+                </button>
+              ))}
+            </div>
+            <p className="mb-2 text-xs uppercase tracking-wide text-slate-500">
+              Joueurs disponibles · {cur === "lions" ? "Lions, joueurs Pro" : "Coris"}
+            </p>
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Filtrer la liste"
+              className="mb-2 w-full rounded-xl border border-white/15 bg-black/20 px-3 py-2.5 text-sm outline-none focus:border-amber-300"
+            />
+            {shown.length === 0 ? (
+              <p className="text-sm text-slate-400">Aucun joueur libre pour cette partie. Ils doivent avoir le solde de la mise et ne pas être déjà à une table.</p>
+            ) : (
+              <ul className="max-h-64 space-y-1 overflow-y-auto">
+                {shown.map((p) => {
+                  const selected = picked.some((x) => x.id === p.id);
+                  return (
+                    <li key={p.id}>
+                      <button
+                        type="button"
+                        disabled={!selected && picked.length >= inviteCount}
+                        onClick={() => (selected ? setPicked((prev) => prev.filter((x) => x.id !== p.id)) : pickPlayer(p))}
+                        className={cx(
+                          "flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-sm disabled:opacity-40",
+                          selected ? "bg-amber-300/15 text-amber-100" : "bg-white/5 hover:bg-white/10",
+                        )}
+                      >
+                        <span>
+                          {p.username}
+                          {p.level === "pro" ? " · Pro" : ""}
+                        </span>
+                        <span className="text-xs">{selected ? "choisi" : "inviter"}</span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </Card>
+        </section>
+      )}
+
       <Card className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
         <div className="space-y-1 text-sm">
           <div>
@@ -184,8 +331,8 @@ export function LobbyClient() {
             Votre solde : {fmtAmount(balance)} {cur === "coris" ? "Coris" : "Lions"}
           </div>
         </div>
-        <Button onClick={create} disabled={busy || balance < stake} className="w-full px-6 py-3 sm:w-auto">
-          {effectiveMode === "cpu" ? "Jouer contre l'ordinateur" : "Créer une table"}
+        <Button onClick={create} disabled={busy || balance < stake || picked.length !== inviteCount} className="w-full px-6 py-3 sm:w-auto">
+          {effectiveMode === "cpu" ? "Jouer contre l'ordinateur" : "Envoyer les invitations"}
         </Button>
       </Card>
       {balance < stake && <Alert kind="info">Solde insuffisant pour cette mise.</Alert>}
@@ -225,5 +372,32 @@ export function LobbyClient() {
         )}
       </section>
     </div>
+  );
+}
+
+/** Bandeau du salon : passage gratuit au niveau Pro, puis jeu en Lions. */
+export function SalonProCta() {
+  return (
+    <section className="relative overflow-hidden rounded-[1.75rem] border border-fuchsia-400/35 bg-gradient-to-br from-violet-600/30 via-fuchsia-600/15 to-amber-500/10 p-5 shadow-xl shadow-fuchsia-950/20 sm:p-6">
+      <div aria-hidden className="pointer-events-none absolute -right-10 -top-16 h-44 w-44 rounded-full bg-fuchsia-400/25 blur-3xl" />
+      <div aria-hidden className="pointer-events-none absolute -bottom-16 left-6 h-32 w-32 rounded-full bg-amber-400/20 blur-3xl" />
+      <div className="relative flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
+          <p className="text-xs font-bold uppercase tracking-[0.18em] text-fuchsia-200">Niveau Pro</p>
+          <h2 className="mt-1 text-xl font-extrabold tracking-tight sm:text-2xl">Jouez en Lions</h2>
+          <p className="mt-1 max-w-xl text-sm text-slate-300">
+            Passez Pro gratuitement, convertissez vos Coris et misez en Lions. Le vainqueur empoche toujours 80&nbsp;%.
+          </p>
+          <ul className="mt-3 flex flex-wrap gap-2 text-xs font-medium text-slate-200">
+            <li className="rounded-full border border-white/10 bg-black/20 px-3 py-1">Gratuit</li>
+            <li className="rounded-full border border-white/10 bg-black/20 px-3 py-1">Parties en Lions</li>
+            <li className="rounded-full border border-white/10 bg-black/20 px-3 py-1">Les Coris restent ouverts</li>
+          </ul>
+        </div>
+        <ButtonLink href="/pro" variant="pro" className="h-12 w-full shrink-0 rounded-2xl px-6 text-[15px] shadow-lg shadow-fuchsia-900/40 sm:w-auto sm:min-w-44">
+          Passer Pro
+        </ButtonLink>
+      </div>
+    </section>
   );
 }

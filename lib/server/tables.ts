@@ -2,7 +2,7 @@ import { HOUSE_SHARE, INACTIVITY_CLAIM_MS, PRO_STAKE_LIONS, STAKE_CORIS, WINNER_
 import { ENGINES } from "../games";
 import { GAMES, modeLabel, modePlayers } from "../games/meta";
 import type { Currency, GameId, Mode, TableView } from "../types";
-import { newId, nowIso, readDb, transact, type Db, type TableRow } from "./db";
+import { newId, nowIso, readDb, transact, type Db, type TableInvite, type TableRow } from "./db";
 import { AppError } from "./errors";
 import { CURRENCY_LABEL, getUser, houseMove, walletMove } from "./wallet";
 
@@ -78,21 +78,34 @@ function checkOver(db: Db, t: TableRow) {
   if (r.over && t.status === "playing") settle(db, t, r.winner, r.draw);
 }
 
-function runCpu(db: Db, t: TableRow) {
-  const engine = ENGINES[t.game];
-  let guard = 0;
-  while (t.status === "playing" && guard++ < 500) {
-    const seat = engine.current(t.state);
-    if (seat == null || !t.seats[seat]?.isCpu) break;
-    const move = engine.ai(t.state, seat);
-    const res = engine.apply(t.state, seat, move, names(t));
-    t.state = res.state;
-    pushLog(t, res.log);
-    checkOver(db, t);
-  }
+function runCpu(_db: Db, _t: TableRow) {
+  // Chaque coup de l'ordinateur est demandé par le client (action "cpu"),
+  // pour que le joueur voie d'abord son coup, puis celui de l'ordinateur.
 }
 
-export function createTable(userId: string, gameRaw: unknown, modeRaw: unknown, currencyRaw: unknown): string {
+function parseInviteNames(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.map((name) => String(name ?? "").trim()).filter(Boolean);
+}
+
+function invitesFor(db: Db, hostId: string, hostName: string, currency: Currency, names: string[]): TableInvite[] {
+  const seen = new Set<string>();
+  const invites: TableInvite[] = [];
+  for (const name of names) {
+    const key = name.toLowerCase();
+    if (seen.has(key) || key === hostName.toLowerCase()) {
+      throw new AppError(400, "Invitez des joueurs différents, autres que vous.");
+    }
+    seen.add(key);
+    const other = db.users.find((x) => x.usernameLower === key);
+    if (!other || other.id === hostId) throw new AppError(400, `Joueur introuvable : ${name}`);
+    if (currency === "lions" && other.level !== "pro") throw new AppError(400, `${other.username} n'est pas joueur Pro.`);
+    invites.push({ userId: other.id, username: other.username, status: "pending" });
+  }
+  return invites;
+}
+
+export function createTable(userId: string, gameRaw: unknown, modeRaw: unknown, currencyRaw: unknown, invitesRaw?: unknown): string {
   const game = String(gameRaw) as GameId;
   const mode = String(modeRaw) as Mode;
   const currency = String(currencyRaw) as Currency;
@@ -114,6 +127,7 @@ export function createTable(userId: string, gameRaw: unknown, modeRaw: unknown, 
       maxPlayers: modePlayers(mode),
       status: "waiting",
       seats: [{ seat: 0, userId: u.id, username: u.username, isCpu: false, active: true }],
+      invites: [],
       createdBy: u.id,
       createdAt: nowIso(),
       winnerSeat: null,
@@ -126,6 +140,15 @@ export function createTable(userId: string, gameRaw: unknown, modeRaw: unknown, 
       version: 1,
     };
     walletMove(db, u, currency, -stake, "mise", `Mise – ${meta.name} (${modeLabel(mode)})`, id);
+    if (mode !== "cpu") {
+      const need = t.maxPlayers - 1;
+      const names = parseInviteNames(invitesRaw);
+      if (names.length !== need) {
+        throw new AppError(400, need === 1 ? "Invitez le joueur avec qui vous voulez jouer." : `Invitez ${need} joueurs.`);
+      }
+      t.invites = invitesFor(db, u.id, u.username, currency, names);
+      t.log.push(`Invitations envoyées à ${t.invites.map((i) => i.username).join(", ")}`);
+    }
     db.tables.push(t);
     if (mode === "cpu") {
       // L'ordinateur mise le même montant, avancé par la maison.
@@ -145,12 +168,17 @@ export function joinTable(userId: string, tableId: string) {
     if (t.status !== "waiting") throw new AppError(400, "Cette table n'accepte plus de joueurs.");
     if (t.seats.some((s) => s.userId === u.id)) throw new AppError(400, "Vous êtes déjà à cette table.");
     if (t.seats.length >= t.maxPlayers) throw new AppError(400, "La table est complète.");
+    const invite = (t.invites ?? []).find((i) => i.userId === u.id);
+    if ((t.invites ?? []).length > 0 && (!invite || invite.status === "declined")) {
+      throw new AppError(403, "Cette partie est sur invitation.");
+    }
     if (t.currency === "lions" && u.level !== "pro") throw new AppError(403, "Table réservée aux joueurs Pro.");
     walletMove(db, u, t.currency, -t.stake, "mise", `Mise – ${GAMES[t.game].name} (${modeLabel(t.mode)})`, t.id);
+    if (invite) invite.status = "accepted";
     t.seats.push({ seat: t.seats.length, userId: u.id, username: u.username, isCpu: false, active: true });
     t.pot += t.stake;
     t.version++;
-    pushLog(t, [`${u.username} rejoint la table`]);
+    pushLog(t, [invite ? `${u.username} accepte l'invitation` : `${u.username} rejoint la table`]);
     if (t.seats.length === t.maxPlayers) startGame(db, t);
   });
 }
@@ -162,7 +190,23 @@ export function leaveTable(userId: string, tableId: string) {
     if (t.status !== "waiting") throw new AppError(400, "La partie a déjà commencé : utilisez « Abandonner ».");
     const idx = t.seats.findIndex((s) => s.userId === u.id);
     if (idx < 0) throw new AppError(400, "Vous n'êtes pas à cette table.");
+    if (t.createdBy === u.id && (t.invites ?? []).length > 0) {
+      for (const s of t.seats) {
+        if (!s.userId) continue;
+        walletMove(db, getUser(db, s.userId), t.currency, t.stake, "remboursement", `Table annulée – ${GAMES[t.game].name}`, t.id);
+      }
+      t.pot = 0;
+      t.seats = [];
+      t.status = "cancelled";
+      t.finishedAt = nowIso();
+      for (const invite of t.invites ?? []) if (invite.status === "pending") invite.status = "declined";
+      t.version++;
+      pushLog(t, [`${u.username} annule la table : mises remboursées`]);
+      return;
+    }
     walletMove(db, u, t.currency, t.stake, "remboursement", `Remboursement – ${GAMES[t.game].name}`, t.id);
+    const gone = (t.invites ?? []).find((i) => i.userId === u.id);
+    if (gone?.status === "accepted") gone.status = "declined";
     t.seats.splice(idx, 1);
     t.seats.forEach((s, i) => (s.seat = i));
     t.pot -= t.stake;
@@ -191,17 +235,70 @@ function forfeit(db: Db, t: TableRow, seat: number, reason: string) {
   settle(db, t, winner, false);
 }
 
+export function declineInvite(userId: string, tableId: string) {
+  return transact((db) => {
+    const t = getTable(db, tableId);
+    if (t.status !== "waiting") throw new AppError(400, "Cette invitation n'est plus valable.");
+    const invite = (t.invites ?? []).find((i) => i.userId === userId && i.status === "pending");
+    if (!invite) throw new AppError(400, "Aucune invitation en attente.");
+    invite.status = "declined";
+    t.version++;
+    pushLog(t, [`${invite.username} refuse l'invitation`]);
+  });
+}
+
+/** L'hôte remplace un joueur qui a refusé, tant que la partie n'a pas commencé. */
+export function invitePlayer(userId: string, tableId: string, usernameRaw: unknown) {
+  return transact((db) => {
+    const t = getTable(db, tableId);
+    const host = getUser(db, userId);
+    if (t.createdBy !== host.id) throw new AppError(403, "Seul l'hôte peut inviter.");
+    if (t.status !== "waiting" || t.mode === "cpu") throw new AppError(400, "Cette table n'accepte plus d'invitation.");
+    const pending = (t.invites ?? []).filter((i) => i.status === "pending").length;
+    if (pending >= t.maxPlayers - t.seats.length) throw new AppError(400, "Toutes les places ont déjà une invitation en attente.");
+    const [invite] = invitesFor(db, host.id, host.username, t.currency, [String(usernameRaw ?? "")]);
+    if (t.seats.some((s) => s.userId === invite.userId)) throw new AppError(400, `${invite.username} est déjà à la table.`);
+    const existing = (t.invites ?? []).find((i) => i.userId === invite.userId);
+    if (existing?.status === "pending") throw new AppError(400, "Invitation déjà envoyée.");
+    if (existing) existing.status = "pending";
+    else (t.invites ??= []).push(invite);
+    t.version++;
+    pushLog(t, [`${host.username} invite ${invite.username}`]);
+  });
+}
+
+/** Joueurs libres pour la monnaie du mode choisi : assez de solde, pas déjà à une table. */
+export function listAvailablePlayers(userId: string, currencyRaw: unknown) {
+  const currency: Currency = currencyRaw === "lions" ? "lions" : "coris";
+  const db = readDb();
+  const stake = stakeFor(currency);
+  const busy = new Set<string>();
+  for (const t of db.tables) {
+    if (t.status !== "waiting" && t.status !== "playing") continue;
+    for (const s of t.seats) if (s.userId) busy.add(s.userId);
+  }
+  return db.users
+    .filter((u) => u.id !== userId && !busy.has(u.id) && (currency === "coris" || u.level === "pro") && u[currency] >= stake)
+    .sort((a, b) => a.usernameLower.localeCompare(b.usernameLower, "fr"))
+    .map((u) => ({ id: u.id, username: u.username, level: u.level }));
+}
+
 export type TableAction =
   | { action: "join" }
   | { action: "leave" }
   | { action: "move"; move: unknown }
   | { action: "resign" }
-  | { action: "claim" };
+  | { action: "claim" }
+  | { action: "cpu" }
+  | { action: "decline" }
+  | { action: "invite"; username: string };
 
 export function tableAction(userId: string, tableId: string, body: Record<string, unknown>) {
   const action = String(body.action ?? "");
   if (action === "join") return joinTable(userId, tableId);
   if (action === "leave") return leaveTable(userId, tableId);
+  if (action === "decline") return declineInvite(userId, tableId);
+  if (action === "invite") return invitePlayer(userId, tableId, body.username);
   return transact((db) => {
     const t = getTable(db, tableId);
     if (t.status !== "playing") throw new AppError(400, "La partie n'est pas en cours.");
@@ -215,6 +312,15 @@ export function tableAction(userId: string, tableId: string, body: Record<string
       pushLog(t, res.log);
       checkOver(db, t);
       runCpu(db, t);
+    } else if (action === "cpu") {
+      if (t.game !== "ludo" && t.game !== "dames" && t.game !== "awale" && t.game !== "echecs") throw new AppError(400, "Action inconnue.");
+      const cur = engine.current(t.state);
+      if (cur == null || !t.seats[cur]?.isCpu) return;
+      const move = engine.ai(t.state, cur);
+      const res = engine.apply(t.state, cur, move, names(t));
+      t.state = res.state;
+      pushLog(t, res.log);
+      checkOver(db, t);
     } else if (action === "resign") {
       forfeit(db, t, seat.seat, "abandonne la partie");
     } else if (action === "claim") {
@@ -241,6 +347,7 @@ export function viewTable(t: TableRow, userId: string | null): TableView {
     maxPlayers: t.maxPlayers,
     status: t.status,
     seats: t.seats.map((s) => ({ ...s })),
+    invites: (t.invites ?? []).map((i) => ({ ...i })),
     createdBy: t.createdBy,
     createdAt: t.createdAt,
     startedAt: t.startedAt,
@@ -267,10 +374,20 @@ export function getTableView(tableId: string, userId: string | null) {
 export function listTables(userId: string) {
   const db = readDb();
   const open = db.tables
-    .filter((t) => t.status === "waiting" && !t.seats.some((s) => s.userId === userId))
+    .filter((t) => t.status === "waiting" && (t.invites ?? []).length === 0 && !t.seats.some((s) => s.userId === userId))
     .slice(-50)
     .reverse()
     .map((t) => viewTable(t, userId));
+  const invites = db.tables
+    .filter((t) => t.status === "waiting" && (t.invites ?? []).some((i) => i.userId === userId && i.status === "pending"))
+    .slice(-20)
+    .reverse()
+    .map((t) => {
+      const v = viewTable(t, userId);
+      v.state = null;
+      v.log = [];
+      return v;
+    });
   const mine = db.tables
     .filter((t) => t.seats.some((s) => s.userId === userId) && t.status !== "cancelled")
     .slice(-30)
@@ -281,5 +398,5 @@ export function listTables(userId: string) {
       v.log = [];
       return v;
     });
-  return { open, mine };
+  return { open, mine, invites };
 }

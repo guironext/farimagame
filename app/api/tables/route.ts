@@ -17,7 +17,7 @@ export async function POST(req: Request) {
   try {
     const userId = await requireUserId();
     const body = await readJson(req);
-    const id = createTable(userId, body.game, body.mode, body.currency);
+    const id = createTable(userId, body.game, body.mode, body.currency, body.invites);
     return Response.json({ id });
   } catch (e) {
     return jsonError(e);

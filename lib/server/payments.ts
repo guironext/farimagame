@@ -94,7 +94,7 @@ export async function withdraw(userId: string, body: Record<string, unknown>) {
   });
 }
 
-/** Décision de l'administrateur sur une demande de retrait en attente. */
+/** Décision de la Maison sur une demande de retrait en attente. */
 export function decideWithdrawal(paymentId: unknown, decision: unknown) {
   return transact((db) => {
     const p = db.payments.find((x) => x.id === paymentId && x.kind === "retrait");
@@ -106,7 +106,7 @@ export function decideWithdrawal(paymentId: unknown, decision: unknown) {
       p.message = "Retrait validé et envoyé (simulation).";
     } else if (decision === "reject") {
       p.status = "rejected";
-      p.message = "Retrait refusé par l'administrateur – montant restitué.";
+      p.message = "Retrait refusé par la Maison – montant restitué.";
       walletMove(db, getUser(db, p.userId), "fcfa", p.amount, "retrait_annule", "Retrait refusé – montant restitué", undefined, { paymentId: p.id });
     } else throw new AppError(400, "Décision inconnue.");
     return paymentView(p, db);
