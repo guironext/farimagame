@@ -19,6 +19,8 @@ interface Props {
   mySeat: number | null;
   canPlay: boolean;
   busy: boolean;
+  /** Vrai quand le dernier lancer vient de l'ordinateur : seul ce lancer fait tourner le dé plusieurs fois. */
+  rollerCpu: boolean;
   onMove: (move: Move) => void;
   camps: LudoCampLabel[];
 }
@@ -137,12 +139,12 @@ function pipTexture(n: number) {
   return tex;
 }
 
-export function LudoScene({ state, mySeat, canPlay, busy, onMove, camps }: Props) {
+export function LudoScene({ state, mySeat, canPlay, busy, rollerCpu, onMove, camps }: Props) {
   const hostRef = useRef<HTMLDivElement>(null);
   const onMoveRef = useRef(onMove);
   onMoveRef.current = onMove;
-  const propsRef = useRef({ state, mySeat, canPlay, busy, camps });
-  propsRef.current = { state, mySeat, canPlay, busy, camps };
+  const propsRef = useRef({ state, mySeat, canPlay, busy, rollerCpu, camps });
+  propsRef.current = { state, mySeat, canPlay, busy, rollerCpu, camps };
 
   useEffect(() => {
     const host = hostRef.current;
@@ -400,11 +402,16 @@ export function LudoScene({ state, mySeat, canPlay, busy, onMove, camps }: Props
       }
 
       const roll = s.lastRoll;
-      const rollId = roll ? `${s.moves}:${roll.seat}:${roll.value}` : "";
+      const rollId = roll ? String(s.rolls ?? 0) : "";
       if (roll && rollId !== die.userData.rollId) {
         die.userData.rollId = rollId;
-        die.userData.spin = 0.85;
         die.userData.value = roll.value;
+        if (propsRef.current.rollerCpu) {
+          die.userData.spin = 1.05;
+        } else {
+          die.userData.spin = 0;
+          die.setRotationFromEuler(faceUp(roll.value));
+        }
       }
       die.userData.prompt = play && s.phase === "roll" && !locked;
       const turnColor = s.colors[s.turn] ?? 0;

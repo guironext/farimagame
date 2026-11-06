@@ -141,13 +141,17 @@ export async function createTable(userId: string, gameRaw: unknown, modeRaw: unk
     };
     walletMove(db, u, currency, -stake, "mise", `Mise – ${meta.name} (${modeLabel(mode)})`, id);
     if (mode !== "cpu") {
-      const need = t.maxPlayers - 1;
       const names = parseInviteNames(invitesRaw);
-      if (names.length !== need) {
-        throw new AppError(400, need === 1 ? "Invitez le joueur avec qui vous voulez jouer." : `Invitez ${need} joueurs.`);
+      if (currency === "lions" && names.length === 0) {
+        t.log.push("Défi Pro lancé : visible par tous les joueurs Pro");
+      } else {
+        const need = t.maxPlayers - 1;
+        if (names.length !== need) {
+          throw new AppError(400, need === 1 ? "Invitez le joueur avec qui vous voulez jouer." : `Invitez ${need} joueurs.`);
+        }
+        t.invites = invitesFor(db, u.id, u.username, currency, names);
+        t.log.push(`Invitations envoyées à ${t.invites.map((i) => i.username).join(", ")}`);
       }
-      t.invites = invitesFor(db, u.id, u.username, currency, names);
-      t.log.push(`Invitations envoyées à ${t.invites.map((i) => i.username).join(", ")}`);
     }
     db.tables.push(t);
     if (mode === "cpu") {
@@ -371,32 +375,41 @@ export async function getTableView(tableId: string, userId: string | null) {
   return viewTable(getTable(db, tableId), userId);
 }
 
+function lightView(t: TableRow, userId: string) {
+  const v = viewTable(t, userId);
+  v.state = null;
+  v.log = [];
+  return v;
+}
+
 export async function listTables(userId: string) {
   const db = await readDb();
+  const isPro = getUser(db, userId).level === "pro";
   const open = db.tables
-    .filter((t) => t.status === "waiting" && (t.invites ?? []).length === 0 && !t.seats.some((s) => s.userId === userId))
+    .filter((t) => t.status === "waiting" && t.currency !== "lions" && (t.invites ?? []).length === 0 && !t.seats.some((s) => s.userId === userId))
     .slice(-50)
     .reverse()
     .map((t) => viewTable(t, userId));
+  const defis = isPro
+    ? db.tables
+        .filter((t) => t.status === "waiting" && t.currency === "lions" && t.mode !== "cpu" && (t.invites ?? []).length === 0)
+        .slice(-30)
+        .reverse()
+        .map((t) => lightView(t, userId))
+    : [];
   const invites = db.tables
     .filter((t) => t.status === "waiting" && (t.invites ?? []).some((i) => i.userId === userId && i.status === "pending"))
     .slice(-20)
     .reverse()
     .map((t) => {
-      const v = viewTable(t, userId);
-      v.state = null;
-      v.log = [];
+      const v = lightView(t, userId);
+      v.invites = v.invites.filter((i) => i.userId === userId && i.status === "pending");
       return v;
     });
   const mine = db.tables
     .filter((t) => t.seats.some((s) => s.userId === userId) && t.status !== "cancelled")
     .slice(-30)
     .reverse()
-    .map((t) => {
-      const v = viewTable(t, userId);
-      v.state = null; // allège la réponse
-      v.log = [];
-      return v;
-    });
-  return { open, mine, invites };
+    .map((t) => lightView(t, userId));
+  return { open, mine, invites, defis };
 }

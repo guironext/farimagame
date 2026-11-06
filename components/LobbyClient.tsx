@@ -16,7 +16,7 @@ export function LobbyClient() {
   const [game, setGame] = useState<GameId>("awale");
   const [mode, setMode] = useState<Mode>("cpu");
   const [currency, setCurrency] = useState<Currency>("coris");
-  const [lists, setLists] = useState<{ open: TableView[]; mine: TableView[]; invites: TableView[] } | null>(null);
+  const [lists, setLists] = useState<{ open: TableView[]; mine: TableView[]; invites: TableView[]; defis?: TableView[] } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [picked, setPicked] = useState<{ id: string; username: string }[]>([]);
@@ -81,7 +81,11 @@ export function LobbyClient() {
   const pot = stake * players;
   const prize = pot * config.WINNER_SHARE;
   const balance = cur === "coris" ? me.coris : me.lions;
-  const invitations = lists?.invites ?? [];
+  const invitations = (lists?.invites ?? []).filter((t) =>
+    t.invites.some((i) => i.userId === me.id && i.status === "pending"),
+  );
+  const defis = isPro ? (lists?.defis ?? []) : [];
+  const launchingDefi = cur === "lions" && effectiveMode !== "cpu";
   const shown = roster.filter((p) => p.username.toLowerCase().includes(query.trim().toLowerCase()));
 
   function pickPlayer(player: { id: string; username: string }) {
@@ -97,7 +101,7 @@ export function LobbyClient() {
         game,
         mode: effectiveMode,
         currency: cur,
-        invites: picked.map((p) => p.username),
+        invites: launchingDefi ? [] : picked.map((p) => p.username),
       });
       await refresh();
       router.push(`/jeu/${r.id}`);
@@ -144,33 +148,15 @@ export function LobbyClient() {
 
       {!isPro && <SalonProCta />}
 
-      {invitations.length > 0 && (
-        <Card className="border-emerald-400/30">
-          <h2 className="mb-3 font-semibold">Invitations reçues</h2>
-          <div className="space-y-3">
-            {invitations.map((t) => (
-              <div key={t.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-white/5 px-3 py-3">
-                <div className="text-sm">
-                  <div className="font-semibold">
-                    {GAMES[t.game].emoji} {GAMES[t.game].name} · {modeLabel(t.mode)}
-                  </div>
-                  <div className="text-slate-400">
-                    {t.seats[0]?.username} vous invite · mise <Money amount={t.stake} currency={t.currency} /> · le vainqueur remporte 80 %
-                  </div>
-                </div>
-                <div className="flex gap-2">
-                  <Button disabled={busy || (t.currency === "lions" && !isPro)} onClick={() => answer(t.id, "join")}>
-                    Accepter
-                  </Button>
-                  <Button variant="ghost" disabled={busy} onClick={() => answer(t.id, "decline")}>
-                    Refuser
-                  </Button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </Card>
-      )}
+      <InvitesAndChallenges
+        invitations={invitations}
+        defis={defis}
+        meId={me.id}
+        busy={busy}
+        isPro={isPro}
+        onAnswer={answer}
+        onJoin={join}
+      />
 
       {active.length > 0 && (
         <Card className="border-amber-400/30">
@@ -256,7 +242,16 @@ export function LobbyClient() {
         </section>
       </div>
 
-      {inviteCount > 0 && (
+      {launchingDefi && (
+        <Card className="border-fuchsia-400/30">
+          <h2 className="font-semibold">Défi Pro</h2>
+          <p className="mt-1 text-sm text-slate-300">
+            Ce défi en Lions sera visible par tous les joueurs Pro. Ils peuvent rejoindre une place libre, et le vainqueur empoche 80&nbsp;%.
+          </p>
+        </Card>
+      )}
+
+      {inviteCount > 0 && !launchingDefi && (
         <section>
           <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-400">
             4. Inviter {inviteCount} joueur{inviteCount > 1 ? "s" : ""}
@@ -331,8 +326,8 @@ export function LobbyClient() {
             Votre solde : {fmtAmount(balance)} {cur === "coris" ? "Coris" : "Lions"}
           </div>
         </div>
-        <Button onClick={create} disabled={busy || balance < stake || picked.length !== inviteCount} className="w-full px-6 py-3 sm:w-auto">
-          {effectiveMode === "cpu" ? "Jouer contre l'ordinateur" : "Envoyer les invitations"}
+        <Button onClick={create} disabled={busy || balance < stake || (!launchingDefi && picked.length !== inviteCount)} className="w-full px-6 py-3 sm:w-auto">
+          {effectiveMode === "cpu" ? "Jouer contre l'ordinateur" : launchingDefi ? "Lancer un défi" : "Envoyer les invitations"}
         </Button>
       </Card>
       {balance < stake && <Alert kind="info">Solde insuffisant pour cette mise.</Alert>}
@@ -372,6 +367,130 @@ export function LobbyClient() {
         )}
       </section>
     </div>
+  );
+}
+
+function hostName(t: TableView) {
+  return t.seats.find((s) => s.userId === t.createdBy)?.username ?? t.seats[0]?.username ?? "Un joueur";
+}
+
+/** Invitations privées du joueur connecté, et défis Pro visibles par tous les joueurs Pro. */
+export function InvitesAndChallenges({
+  invitations,
+  defis,
+  meId,
+  busy,
+  isPro,
+  onAnswer,
+  onJoin,
+}: {
+  invitations: TableView[];
+  defis: TableView[];
+  meId: string;
+  busy: boolean;
+  isPro: boolean;
+  onAnswer: (id: string, action: "join" | "decline") => void;
+  onJoin: (id: string) => void;
+}) {
+  const total = invitations.length + defis.length;
+  return (
+    <section aria-labelledby="invitations-defis" className="space-y-3">
+      <div className="flex items-end justify-between gap-3">
+        <div>
+          <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-fuchsia-200">Pour vous</p>
+          <h2 id="invitations-defis" className="mt-1 text-xl font-extrabold tracking-tight sm:text-2xl">
+            Invitations et Défis
+          </h2>
+        </div>
+        {total > 0 && (
+          <span className="rounded-full bg-fuchsia-400/15 px-2.5 py-1 text-xs font-bold text-fuchsia-100">{total}</span>
+        )}
+      </div>
+
+      <Card className="border-emerald-400/25">
+        <h3 className="text-sm font-bold uppercase tracking-wide text-emerald-200">Invitations</h3>
+        {invitations.length === 0 ? (
+          <p className="mt-3 text-sm text-slate-400">Aucune invitation ne vous est adressée.</p>
+        ) : (
+          <ul className="mt-3 grid gap-3 lg:grid-cols-2">
+            {invitations.map((t) => (
+              <li key={t.id} className="rounded-2xl border border-white/10 bg-white/[0.04] p-3">
+                <div className="flex items-start gap-3">
+                  <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br ${GAMES[t.game].color} text-2xl`}>
+                    {GAMES[t.game].emoji}
+                  </span>
+                  <div className="min-w-0">
+                    <p className="font-semibold">
+                      {GAMES[t.game].name} · {modeLabel(t.mode)}
+                    </p>
+                    <p className="mt-0.5 text-sm text-slate-300">
+                      <strong className="text-white">{hostName(t)}</strong> vous invite · mise <Money amount={t.stake} currency={t.currency} />
+                    </p>
+                    <p className="mt-0.5 text-xs text-slate-500">Le vainqueur empoche 80&nbsp;%.</p>
+                  </div>
+                </div>
+                <div className="mt-3 grid grid-cols-2 gap-2">
+                  <Button disabled={busy || (t.currency === "lions" && !isPro)} onClick={() => onAnswer(t.id, "join")}>
+                    Accepter
+                  </Button>
+                  <Button variant="ghost" disabled={busy} onClick={() => onAnswer(t.id, "decline")}>
+                    Refuser
+                  </Button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Card>
+
+      {isPro && (
+        <Card className="border-fuchsia-400/30">
+          <h3 className="text-sm font-bold uppercase tracking-wide text-fuchsia-200">Défis Pro</h3>
+          <p className="mt-1 text-xs text-slate-400">Visibles par tous les joueurs Pro.</p>
+          {defis.length === 0 ? (
+            <p className="mt-3 text-sm text-slate-400">Aucun défi en Lions pour le moment.</p>
+          ) : (
+            <ul className="mt-3 grid gap-3 lg:grid-cols-2">
+              {defis.map((t) => {
+                const mine = t.createdBy === meId || t.mySeat != null;
+                return (
+                  <li key={t.id} className="rounded-2xl border border-white/10 bg-white/[0.04] p-3">
+                    <div className="flex items-start gap-3">
+                      <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br ${GAMES[t.game].color} text-2xl`}>
+                        {GAMES[t.game].emoji}
+                      </span>
+                      <div className="min-w-0">
+                        <p className="font-semibold">
+                          {GAMES[t.game].name} · {modeLabel(t.mode)}
+                        </p>
+                        <p className="mt-0.5 text-sm text-slate-300">
+                          <strong className="text-white">{hostName(t)}</strong>
+                          {mine ? " · votre défi" : " lance un défi"} · mise <Money amount={t.stake} currency={t.currency} />
+                        </p>
+                        <p className="mt-0.5 text-xs text-slate-500">
+                          {t.seats.length}/{t.maxPlayers} joueurs · le vainqueur empoche 80&nbsp;%.
+                        </p>
+                      </div>
+                    </div>
+                    <div className="mt-3">
+                      {mine ? (
+                        <ButtonLink href={`/jeu/${t.id}`} variant="pro" className="w-full">
+                          Ouvrir
+                        </ButtonLink>
+                      ) : (
+                        <Button variant="pro" className="w-full" disabled={busy} onClick={() => onJoin(t.id)}>
+                          Rejoindre
+                        </Button>
+                      )}
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </Card>
+      )}
+    </section>
   );
 }
 

@@ -3,6 +3,7 @@ import { FeaturedMatches } from "@/components/home/FeaturedMatches";
 import { HomeCta } from "@/components/HomeCta";
 import { IconChevronRight } from "@/components/icons";
 import { LogoVideo } from "@/components/LogoVideo";
+import { ButtonLink } from "@/components/ui";
 import { GAME_LIST } from "@/lib/games/meta";
 import { CORIS_PER_LION, FCFA_PER_LION, PRO_STAKE_LIONS, SIGNUP_BONUS_CORIS, STAKE_CORIS } from "@/lib/config";
 import { COMPETITIONS } from "@/lib/sports/competitions";
@@ -43,6 +44,45 @@ export default function Home() {
             <Stat value="80 %" label="au gagnant" />
             <Stat value={String(COMPETITIONS.length)} label="compétitions" />
           </dl>
+        </div>
+      </section>
+
+      <section className="relative overflow-hidden rounded-[1.75rem] border border-fuchsia-300/25 bg-[#140a22] px-5 py-6 shadow-2xl shadow-fuchsia-950/40 sm:px-8 sm:py-8">
+        <div aria-hidden className="pointer-events-none absolute -right-16 -top-20 h-56 w-56 rounded-full bg-fuchsia-500/30 blur-3xl" />
+        <div aria-hidden className="pointer-events-none absolute -bottom-24 left-8 h-48 w-48 rounded-full bg-amber-400/20 blur-3xl" />
+        <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-fuchsia-200/70 to-transparent" />
+
+        <div className="relative grid items-center gap-6 lg:grid-cols-[1fr_auto] lg:gap-10">
+          <div className="min-w-0 text-center lg:text-left">
+            <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-fuchsia-200">Niveau Pro</p>
+            <h2 className="mx-auto mt-2 max-w-xl text-[1.7rem] font-black leading-[1.05] tracking-tight sm:text-4xl lg:mx-0">
+              Passer Pro, c&apos;est
+              <span className="mt-1 block bg-gradient-to-r from-amber-200 via-amber-100 to-fuchsia-200 bg-clip-text text-transparent">
+                gagner de l&apos;argent
+              </span>
+            </h2>
+            <p className="mx-auto mt-3 max-w-xl text-sm leading-relaxed text-slate-300 sm:text-base lg:mx-0">
+              Convertissez vos Coris en Lions, jouez les parties Pro et retirez vos gains. Le vainqueur empoche{" "}
+              <strong className="text-white">80&nbsp;% du pot</strong>.
+            </p>
+            <ul className="mt-4 flex flex-wrap justify-center gap-2 lg:justify-start">
+              <li className="rounded-full border border-white/10 bg-white/[0.06] px-3 py-1.5 text-xs font-semibold text-slate-100">Gratuit</li>
+              <li className="rounded-full border border-amber-300/20 bg-amber-400/10 px-3 py-1.5 text-xs font-semibold text-amber-100">
+                {CORIS_PER_LION} Coris = 1 Lion
+              </li>
+              <li className="rounded-full border border-emerald-300/20 bg-emerald-400/10 px-3 py-1.5 text-xs font-semibold text-emerald-100">
+                1 Lion = {FCFA_PER_LION.toLocaleString("fr-FR")} F CFA
+              </li>
+            </ul>
+          </div>
+
+          <ButtonLink
+            href="/pro"
+            variant="pro"
+            className="h-14 w-full rounded-2xl px-8 text-base shadow-lg shadow-fuchsia-900/50 lg:w-auto lg:min-w-52"
+          >
+            Passer Pro
+          </ButtonLink>
         </div>
       </section>
 

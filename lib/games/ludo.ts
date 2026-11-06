@@ -21,6 +21,8 @@ export interface LudoState {
   phase: "roll" | "move";
   dice: number | null;
   lastRoll: { seat: number; value: number } | null;
+  /** Nombre de lancers. N'augmente pas quand un pion avance. */
+  rolls: number;
   sixes: number;
   active: boolean[];
   over: boolean;
@@ -155,6 +157,7 @@ export const ludo: Engine<LudoState, LudoMove> = {
       phase: "roll",
       dice: null,
       lastRoll: null,
+      rolls: 0,
       sixes: 0,
       active: Array(n).fill(true),
       over: false,
@@ -174,6 +177,7 @@ export const ludo: Engine<LudoState, LudoMove> = {
       if (s.phase !== "roll") throw new GameError("Vous devez d'abord déplacer un pion.");
       const d = 1 + Math.floor(Math.random() * 6);
       s.lastRoll = { seat, value: d };
+      s.rolls = (s.rolls ?? 0) + 1;
       log.push(`${names[seat]} lance le dé : ${d}`);
       if (d === 6) {
         s.sixes++;

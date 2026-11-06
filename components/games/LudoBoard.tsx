@@ -48,7 +48,7 @@ export function LudoBoard({ table, state, mySeat, canPlay, busy, onMove }: Board
   return (
     <div className="mx-auto w-full max-w-[680px]">
       <div className="relative aspect-square overflow-hidden rounded-[28px] border border-amber-200/15 bg-[#1a120c] shadow-[0_30px_80px_-30px_rgba(0,0,0,0.8)]">
-        <LudoScene state={state} mySeat={mySeat} canPlay={canPlay} busy={busy} onMove={onMove} camps={camps} />
+        <LudoScene state={state} mySeat={mySeat} canPlay={canPlay} busy={busy} rollerCpu={!!last && !!table.seats[last.seat]?.isCpu} onMove={onMove} camps={camps} />
         <div className={cx("pointer-events-none absolute left-3 right-3 top-3 z-10 rounded-2xl border px-3 py-2 text-center text-sm font-semibold shadow-lg", canPlay ? "border-emerald-300/40 bg-emerald-950/80 text-emerald-50" : actorCpu ? "border-amber-200/40 bg-amber-950/85 text-amber-50" : "border-white/15 bg-slate-950/80 text-white")}>
           <span className={cx("mr-2 inline-block h-2.5 w-2.5 rounded-full align-middle", BG[turnColor])} />
           {banner}
