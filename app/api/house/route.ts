@@ -8,7 +8,7 @@ export async function GET() {
   await connection();
   try {
     await requireMoneyId();
-    const db = readDb();
+    const db = await readDb();
     const sum = (type: string, cur: string) =>
       fromUnits(db.house.ledger.filter((l) => l.type === type && l.currency === cur).reduce((a, l) => a + l.amount, 0));
     return Response.json({

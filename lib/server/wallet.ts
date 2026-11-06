@@ -86,8 +86,8 @@ export interface ExternalProfile {
  * rôle JOUEUR (ADMIN si aucun administrateur ne peut encore se connecter), niveau normal, 500 Coris de bienvenue.
  * Pseudo : pseudo Clerk, sinon prénom, sinon début de l'e-mail, sinon « joueur » ; rendu unique (gerard, gerard2…).
  */
-export function provisionUser(clerkId: string, profile: ExternalProfile): UserRow {
-  const found = readDb().users.find((u) => u.clerkId === clerkId);
+export async function provisionUser(clerkId: string, profile: ExternalProfile): Promise<UserRow> {
+  const found = (await readDb()).users.find((u) => u.clerkId === clerkId);
   if (found) return found;
   return transact((db) => {
     const again = db.users.find((u) => u.clerkId === clerkId);
@@ -117,7 +117,7 @@ export function provisionUser(clerkId: string, profile: ExternalProfile): UserRo
   });
 }
 
-export function upgradeToPro(userId: string) {
+export async function upgradeToPro(userId: string) {
   return transact((db) => {
     const u = getUser(db, userId);
     if (u.level === "pro") throw new AppError(400, "Vous êtes déjà Pro.");
@@ -128,7 +128,7 @@ export function upgradeToPro(userId: string) {
 }
 
 /** Conversion Coris -> Lions (50 Coris = 1 Lion). Réservée aux joueurs Pro. */
-export function convertCorisToLions(userId: string, lionsRaw: unknown) {
+export async function convertCorisToLions(userId: string, lionsRaw: unknown) {
   const lions = Number(lionsRaw);
   if (!Number.isInteger(lions) || lions < 1 || lions > 100000)
     throw new AppError(400, "Indiquez un nombre entier de Lions (au moins 1).");
@@ -144,7 +144,7 @@ export function convertCorisToLions(userId: string, lionsRaw: unknown) {
 }
 
 /** Conversion Lions -> F CFA (taux FCFA_PER_LION). Réservée aux joueurs Pro, par nombre entier de Lions. */
-export function convertLionsToFcfa(userId: string, lionsRaw: unknown) {
+export async function convertLionsToFcfa(userId: string, lionsRaw: unknown) {
   const lions = Number(lionsRaw);
   if (!Number.isInteger(lions) || lions < 1 || lions > 100000)
     throw new AppError(400, "Indiquez un nombre entier de Lions (au moins 1).");

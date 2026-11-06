@@ -42,11 +42,11 @@ export async function ensureSynced(force = false): Promise<void> {
 
 async function syncMatches(force: boolean): Promise<void> {
   const provider = getSportsProvider();
-  const db = readDb();
+  const db = await readDb();
   const last = db.sports.lastSyncAt ? Date.parse(db.sports.lastSyncAt) : 0;
   const fresh = db.sports.provider === provider.id && Date.now() - last < provider.syncIntervalMs;
   if (fresh && !force) {
-    if (db.matches.some((m) => isSettleable(m))) transact((d) => settleDue(d));
+    if (db.matches.some((m) => isSettleable(m))) await transact((d) => settleDue(d));
     return;
   }
   if (inflight) return inflight;
@@ -56,7 +56,7 @@ async function syncMatches(force: boolean): Promise<void> {
     const to = new Date(now + FUTURE_DAYS * DAY);
     try {
       const fixtures = await provider.fetchFixtures(from, to);
-      transact((d) => {
+      await transact((d) => {
         const stamp = nowIso();
         const byId = new Map(d.matches.map((m) => [m.id, m]));
         for (const f of fixtures) {
@@ -99,7 +99,7 @@ async function syncMatches(force: boolean): Promise<void> {
         settleDue(d);
       });
     } catch (e) {
-      transact((d) => {
+      await transact((d) => {
         d.sports = { ...d.sports, provider: provider.id, lastSyncAt: nowIso(), lastError: (e as Error).message };
         recordQuota(d, provider);
         settleDue(d);
@@ -194,7 +194,7 @@ function liveCandidates(db: Db, providerId: string, now: number) {
 async function syncLive(): Promise<void> {
   const provider = getSportsProvider();
   if (!provider.fetchLive) return;
-  const db = readDb();
+  const db = await readDb();
   const now = Date.now();
   const candidates = liveCandidates(db, provider.id, now);
   if (candidates.length === 0) return;
@@ -204,7 +204,7 @@ async function syncLive(): Promise<void> {
   liveInflight = (async () => {
     try {
       const fixtures = await provider.fetchLive!(candidates.map((m) => m.id.replace(/^af:/, "")));
-      transact((d) => {
+      await transact((d) => {
         const byId = new Map(d.matches.map((m) => [m.id, m]));
         const stamp = nowIso();
         for (const f of fixtures) {
@@ -217,7 +217,7 @@ async function syncLive(): Promise<void> {
         settleDue(d);
       });
     } catch (e) {
-      transact((d) => {
+      await transact((d) => {
         d.sports = { ...d.sports, lastLiveAt: nowIso(), lastLiveError: (e as Error).message };
         recordQuota(d, provider);
       });
@@ -423,8 +423,8 @@ function myBetsByMatch(db: Db, userId: string): Record<string, MyMatchBets> {
 }
 
 /** Liste des matchs (marché 1N2 seulement, pour alléger) : à venir / en cours / terminés récemment. */
-export function listMatches(userId?: string | null) {
-  const db = readDb();
+export async function listMatches(userId?: string | null) {
+  const db = await readDb();
   const now = Date.now();
   const matches = db.matches
     .filter((m) => Date.parse(m.kickoff) > now - PAST_DAYS * DAY && Date.parse(m.kickoff) < now + FUTURE_DAYS * DAY)
@@ -467,21 +467,21 @@ function betView(db: Db, b: BetRow): BetView {
   };
 }
 
-export function getMatch(id: string, userId: string | null) {
-  const db = readDb();
+export async function getMatch(id: string, userId: string | null) {
+  const db = await readDb();
   const m = db.matches.find((x) => x.id === id);
   if (!m) throw new AppError(404, "Match introuvable.");
   const myBets = userId ? db.bets.filter((b) => b.matchId === id && b.userId === userId).reverse().map((b) => betView(db, b)) : [];
   return { match: matchView(db, m), myBets, provider: providerInfo(db) };
 }
 
-export function myBets(userId: string): BetView[] {
-  const db = readDb();
+export async function myBets(userId: string): Promise<BetView[]> {
+  const db = await readDb();
   return db.bets.filter((b) => b.userId === userId).reverse().map((b) => betView(db, b));
 }
 
 // ------------------------------------------------------------------ prise de pari
-export function placeBet(userId: string, body: Record<string, unknown>) {
+export async function placeBet(userId: string, body: Record<string, unknown>) {
   const matchId = String(body.matchId ?? "");
   const market = String(body.market ?? "") as MarketId;
   const selection = String(body.selection ?? "") as Selection;
@@ -491,7 +491,7 @@ export function placeBet(userId: string, body: Record<string, unknown>) {
   if (!def.outcomes.some((o) => o.selection === selection)) throw new AppError(400, "Choix invalide pour ce marché.");
   if (!Number.isInteger(stake) || stake < BET_MIN_FCFA || stake > BET_MAX_FCFA)
     throw new AppError(400, `La mise doit être un nombre entier entre ${BET_MIN_FCFA.toLocaleString("fr-FR")} et ${BET_MAX_FCFA.toLocaleString("fr-FR")} F CFA.`);
-  return transact((db) => {
+  return await transact((db) => {
     const u = getUser(db, userId);
     const m = db.matches.find((x) => x.id === matchId);
     if (!m) throw new AppError(404, "Match introuvable.");
@@ -505,8 +505,8 @@ export function placeBet(userId: string, body: Record<string, unknown>) {
 }
 
 // ------------------------------------------------------------------ administration
-export function adminOverview() {
-  const db = readDb();
+export async function adminOverview() {
+  const db = await readDb();
   const now = Date.now();
   const sum = (arr: number[]) => arr.reduce((a, b) => a + b, 0);
   const commission = sum(db.house.ledger.filter((l) => l.type === "commission_pari").map((l) => l.amount));
@@ -546,8 +546,8 @@ function parseGoals(v: unknown) {
 }
 
 /** Fixe le score final (ou le statut reporté / annulé) d'un match et règle les paris. */
-export function adminSetResult(matchIdRaw: unknown, body: Record<string, unknown>) {
-  return transact((db) => {
+export async function adminSetResult(matchIdRaw: unknown, body: Record<string, unknown>) {
+  return await transact((db) => {
     const m = db.matches.find((x) => x.id === matchIdRaw);
     if (!m) throw new AppError(404, "Match introuvable.");
     if (m.settledAt) throw new AppError(400, "Ce match est déjà réglé.");

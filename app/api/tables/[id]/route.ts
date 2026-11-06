@@ -8,7 +8,7 @@ export async function GET(_req: Request, ctx: RouteContext<"/api/tables/[id]">) 
   try {
     const userId = await requireUserId();
     const { id } = await ctx.params;
-    return Response.json({ table: getTableView(id, userId) });
+    return Response.json({ table: await getTableView(id, userId) });
   } catch (e) {
     return jsonError(e);
   }
@@ -19,8 +19,8 @@ export async function POST(req: Request, ctx: RouteContext<"/api/tables/[id]">) 
     const userId = await requireUserId();
     const { id } = await ctx.params;
     const body = await readJson(req);
-    tableAction(userId, id, body);
-    return Response.json({ table: getTableView(id, userId) });
+    await tableAction(userId, id, body);
+    return Response.json({ table: await getTableView(id, userId) });
   } catch (e) {
     return jsonError(e);
   }

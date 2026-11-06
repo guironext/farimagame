@@ -8,7 +8,7 @@ export async function GET() {
   try {
     const userId = await requireUserId();
     await ensureSynced();
-    return Response.json({ bets: myBets(userId) });
+    return Response.json({ bets: await myBets(userId) });
   } catch (e) {
     return jsonError(e);
   }
@@ -18,7 +18,7 @@ export async function POST(req: Request) {
   try {
     const userId = await requireUserId();
     const body = await readJson(req);
-    const r = placeBet(userId, body);
+    const r = await placeBet(userId, body);
     return Response.json({ bet: r.bet, match: r.match, user: publicUser(r.user) });
   } catch (e) {
     return jsonError(e);

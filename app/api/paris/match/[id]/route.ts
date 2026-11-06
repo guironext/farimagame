@@ -9,7 +9,7 @@ export async function GET(_req: Request, ctx: RouteContext<"/api/paris/match/[id
     const { id } = await ctx.params;
     await ensureSynced();
     const u = await currentUser();
-    return Response.json(getMatch(decodeURIComponent(id), u?.id ?? null));
+    return Response.json(await getMatch(decodeURIComponent(id), u?.id ?? null));
   } catch (e) {
     return jsonError(e);
   }

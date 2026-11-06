@@ -10,26 +10,40 @@ function redirectToSignIn(req: NextRequest) {
   return NextResponse.redirect(url);
 }
 
+/** Une navigation interne (RSC) ne doit pas recevoir une redirection : Next.js affiche alors « This page couldn't load ». */
+function isDocumentNavigation(req: NextRequest) {
+  const dest = req.headers.get("sec-fetch-dest");
+  return dest === "document" || dest === "iframe" || !req.headers.has("rsc");
+}
+
 const withClerk = clerkMiddleware(
   async (auth, req) => {
     if (!isProtectedPath(req.nextUrl.pathname)) return;
     const { userId } = await auth();
-    if (!userId) return redirectToSignIn(req);
+    if (!userId && isDocumentNavigation(req)) return redirectToSignIn(req);
   },
   { signInUrl: SIGN_IN_URL, signUpUrl: SIGN_UP_URL },
 );
 
 /** Sans Clerk (production sans clés) : personne n'est connecté, les pages réservées renvoient vers /connexion. */
 function withoutClerk(req: NextRequest) {
-  return isProtectedPath(req.nextUrl.pathname) ? redirectToSignIn(req) : NextResponse.next();
+  return isProtectedPath(req.nextUrl.pathname) && isDocumentNavigation(req) ? redirectToSignIn(req) : NextResponse.next();
 }
 
 export default async function proxy(req: NextRequest, event: NextFetchEvent) {
   if (!CLERK_ENABLED) return withoutClerk(req);
-  const res = await withClerk(req, event);
+  let res: Awaited<ReturnType<typeof withClerk>>;
+  try {
+    res = await withClerk(req, event);
+  } catch (e) {
+    // Requête interne (pas un document) : Clerk demande une poignée de main sans redirection.
+    if (e instanceof Error && e.message.includes("handshake status without redirect")) return NextResponse.next();
+    throw e;
+  }
   // En mode keyless (développement sans clés), tant que le navigateur n'a pas reçu le cookie des clés temporaires,
   // Clerk laisse passer la requête en « déconnecté » sans appeler notre fonction : on redirige quand même.
   if (
+    isDocumentNavigation(req) &&
     isProtectedPath(req.nextUrl.pathname) &&
     res instanceof Response &&
     !(res.status >= 300 && res.status < 400) &&

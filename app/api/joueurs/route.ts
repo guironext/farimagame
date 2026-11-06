@@ -8,7 +8,7 @@ export async function GET(req: Request) {
   try {
     const userId = await requireUserId();
     const currency = new URL(req.url).searchParams.get("currency") ?? "coris";
-    return Response.json({ players: listAvailablePlayers(userId, currency) });
+    return Response.json({ players: await listAvailablePlayers(userId, currency) });
   } catch (e) {
     return jsonError(e);
   }

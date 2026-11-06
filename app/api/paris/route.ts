@@ -11,7 +11,7 @@ export async function GET() {
     await ensureSynced();
     const u = await currentUser();
     const competitions = COMPETITIONS.map(({ id, name, short, group, country, flag }) => ({ id, name, short, group, country, flag }));
-    return Response.json({ ...listMatches(u?.id ?? null), competitions, groups: GROUPS });
+    return Response.json({ ...(await listMatches(u?.id ?? null)), competitions, groups: GROUPS });
   } catch (e) {
     return jsonError(e);
   }

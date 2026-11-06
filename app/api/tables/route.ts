@@ -7,7 +7,7 @@ export async function GET() {
   await connection();
   try {
     const userId = await requireUserId();
-    return Response.json(listTables(userId));
+    return Response.json(await listTables(userId));
   } catch (e) {
     return jsonError(e);
   }
@@ -17,7 +17,7 @@ export async function POST(req: Request) {
   try {
     const userId = await requireUserId();
     const body = await readJson(req);
-    const id = createTable(userId, body.game, body.mode, body.currency, body.invites);
+    const id = await createTable(userId, body.game, body.mode, body.currency, body.invites);
     return Response.json({ id });
   } catch (e) {
     return jsonError(e);

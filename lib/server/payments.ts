@@ -47,12 +47,12 @@ export async function deposit(userId: string, body: Record<string, unknown>) {
   const provider = getPaymentProvider();
   const id = newId("pay_");
   const now = nowIso();
-  transact((db) => {
+  await transact((db) => {
     getUser(db, userId);
     db.payments.push({ id, userId, kind: "depot", operator, phone, amount: toUnits(amount), status: "pending", provider: provider.id, createdAt: now, updatedAt: now });
   });
   const res = await provider.collect({ reference: id, userId, operator, phone, amount });
-  return transact((db) => {
+  return await transact((db) => {
     const p = db.payments.find((x) => x.id === id)!;
     p.providerRef = res.providerRef;
     p.message = res.message;
@@ -73,14 +73,14 @@ export async function withdraw(userId: string, body: Record<string, unknown>) {
   const provider = getPaymentProvider();
   const id = newId("pay_");
   const now = nowIso();
-  transact((db) => {
+  await transact((db) => {
     const u = getUser(db, userId);
     if (u.fcfa < toUnits(amount)) throw new AppError(400, "Solde F CFA insuffisant.");
     db.payments.push({ id, userId, kind: "retrait", operator, phone, amount: toUnits(amount), status: "pending", provider: provider.id, createdAt: now, updatedAt: now });
     walletMove(db, u, "fcfa", -toUnits(amount), "retrait", `Retrait ${operatorName(operator)}${provider.isSimulation ? " (simulation)" : ""}`, undefined, { paymentId: id });
   });
   const res = await provider.payout({ reference: id, userId, operator, phone, amount });
-  return transact((db) => {
+  return await transact((db) => {
     const p = db.payments.find((x) => x.id === id)!;
     p.providerRef = res.providerRef;
     p.message = res.message;
@@ -95,8 +95,8 @@ export async function withdraw(userId: string, body: Record<string, unknown>) {
 }
 
 /** Décision de la Maison sur une demande de retrait en attente. */
-export function decideWithdrawal(paymentId: unknown, decision: unknown) {
-  return transact((db) => {
+export async function decideWithdrawal(paymentId: unknown, decision: unknown) {
+  return await transact((db) => {
     const p = db.payments.find((x) => x.id === paymentId && x.kind === "retrait");
     if (!p) throw new AppError(404, "Demande de retrait introuvable.");
     if (p.status !== "pending") throw new AppError(400, "Cette demande a déjà été traitée.");
@@ -113,7 +113,7 @@ export function decideWithdrawal(paymentId: unknown, decision: unknown) {
   });
 }
 
-export function listPayments(userId: string): PaymentView[] {
-  const db = readDb();
+export async function listPayments(userId: string): Promise<PaymentView[]> {
+  const db = await readDb();
   return db.payments.filter((p) => p.userId === userId).slice(-100).reverse().map((p) => paymentView(p));
 }

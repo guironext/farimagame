@@ -10,9 +10,9 @@ export async function GET() {
   try {
     await requireMoneyId();
     await ensureSynced();
-    const db = readDb();
+    const db = await readDb();
     const payments = db.payments.slice(-100).reverse().map((p) => paymentView(p, db));
-    return Response.json({ ...adminOverview(), payments });
+    return Response.json({ ...(await adminOverview()), payments });
   } catch (e) {
     return jsonError(e);
   }
@@ -24,12 +24,12 @@ export async function POST(req: Request) {
     const body = await readJson(req);
     switch (body.action) {
       case "result":
-        return Response.json({ match: adminSetResult(body.matchId, body) });
+        return Response.json({ match: await adminSetResult(body.matchId, body) });
       case "sync":
         await ensureSynced(true);
         return Response.json({ ok: true });
       case "withdrawal":
-        return Response.json({ payment: decideWithdrawal(body.paymentId, body.decision) });
+        return Response.json({ payment: await decideWithdrawal(body.paymentId, body.decision) });
       default:
         throw new AppError(400, "Action inconnue.");
     }

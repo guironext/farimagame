@@ -9,7 +9,7 @@ export async function GET() {
   await connection();
   try {
     const userId = await requireUserId();
-    const db = readDb();
+    const db = await readDb();
     const txs: TxView[] = db.transactions
       .filter((t) => t.userId === userId)
       .slice(-200)

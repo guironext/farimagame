@@ -12,7 +12,7 @@ export async function GET() {
   await connection();
   try {
     const userId = await requireUserId();
-    const db = readDb();
+    const db = await readDb();
     const transactions: TxView[] = db.transactions
       .filter((t) => t.userId === userId && (t.currency === "fcfa" || (t.type.startsWith("conversion") && t.label.includes("F CFA"))))
       .slice(-200)
@@ -28,7 +28,7 @@ export async function GET() {
         createdAt: t.createdAt,
       }));
     const p = getPaymentProvider();
-    return Response.json({ transactions, payments: listPayments(userId), provider: { id: p.id, label: p.label, isSimulation: p.isSimulation } });
+    return Response.json({ transactions, payments: await listPayments(userId), provider: { id: p.id, label: p.label, isSimulation: p.isSimulation } });
   } catch (e) {
     return jsonError(e);
   }
@@ -46,7 +46,7 @@ export async function POST(req: Request) {
       const r = await withdraw(userId, body);
       return Response.json({ payment: r.payment, user: publicUser(r.user) });
     }
-    if (body.action === "convert") return Response.json({ user: publicUser(convertLionsToFcfa(userId, body.lions)) });
+    if (body.action === "convert") return Response.json({ user: publicUser(await convertLionsToFcfa(userId, body.lions)) });
     throw new AppError(400, "Action inconnue.");
   } catch (e) {
     return jsonError(e);

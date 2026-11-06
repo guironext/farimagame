@@ -26,7 +26,7 @@ async function testUser(): Promise<UserRow | undefined> {
   if (process.env.NODE_ENV !== "production") {
     if (process.env.FARIMA_TEST_AUTH === "1" && process.env.FARIMA_DATA_DIR) {
       const name = (await headers()).get(TEST_USER_HEADER)?.trim();
-      if (name) return provisionUser(`test:${name.toLowerCase()}`, { username: name, email: `${name.toLowerCase()}@test.invalid` });
+      if (name) return await provisionUser(`test:${name.toLowerCase()}`, { username: name, email: `${name.toLowerCase()}@test.invalid` });
     }
   }
   return undefined;
@@ -40,14 +40,14 @@ export async function currentUser(): Promise<UserRow | null> {
 
   const { userId } = await auth();
   if (!userId) return null;
-  const existing = readDb().users.find((u) => u.clerkId === userId);
+  const existing = (await readDb()).users.find((u) => u.clerkId === userId);
   if (existing) return existing;
 
   // Première visite de ce compte Clerk : on lit son profil (pseudo, prénom, e-mail) pour créer la fiche joueur.
   const cu = await clerkCurrentUser();
   if (!cu) return null;
   const email = cu.primaryEmailAddress?.emailAddress ?? cu.emailAddresses?.[0]?.emailAddress ?? null;
-  return provisionUser(userId, { username: cu.username, firstName: cu.firstName, email });
+  return await provisionUser(userId, { username: cu.username, firstName: cu.firstName, email });
 }
 
 export const getCurrentUser = currentUser;

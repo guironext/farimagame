@@ -80,8 +80,8 @@ function startOfNextMonth(now: number) {
   return Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1);
 }
 
-function setCache(patch: Partial<OddsCache>) {
-  transact((d) => {
+async function setCache(patch: Partial<OddsCache>) {
+  await transact((d) => {
     d.oddsApi = { events: [], ...(d.oddsApi ?? {}), ...patch };
   });
 }
@@ -90,11 +90,11 @@ function setCache(patch: Partial<OddsCache>) {
  * Lance (en arrière-plan) un rafraîchissement des cotes bookmakers si le cache est périmé.
  * Ne fait rien sans ODDS_API_KEY. Renvoie la promesse en cours (utile pour les tests), sinon null.
  */
-export function scheduleOddsRefresh(): Promise<void> | null {
+export async function scheduleOddsRefresh(): Promise<void | null> {
   const key = process.env.ODDS_API_KEY?.trim();
   if (!key) return null;
   if (inflight) return inflight;
-  const db = readDb();
+  const db = await readDb();
   const now = Date.now();
   const cache = db.oddsApi;
   if (cache?.nextAt && now < Date.parse(cache.nextAt)) return null;
@@ -170,7 +170,7 @@ export function scheduleOddsRefresh(): Promise<void> | null {
       nextMs = refreshesLeft <= 0 ? untilReset : Math.max(nextMs, untilReset / refreshesLeft);
     }
 
-    transact((d) => {
+    await transact((d) => {
       const prev = d.oddsApi?.events ?? [];
       const keep = prev.filter((e) => {
         if (Date.parse(e.commence) < t - 3 * DAY) return false; // trop vieux

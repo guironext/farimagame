@@ -105,7 +105,7 @@ function invitesFor(db: Db, hostId: string, hostName: string, currency: Currency
   return invites;
 }
 
-export function createTable(userId: string, gameRaw: unknown, modeRaw: unknown, currencyRaw: unknown, invitesRaw?: unknown): string {
+export async function createTable(userId: string, gameRaw: unknown, modeRaw: unknown, currencyRaw: unknown, invitesRaw?: unknown): Promise<string> {
   const game = String(gameRaw) as GameId;
   const mode = String(modeRaw) as Mode;
   const currency = String(currencyRaw) as Currency;
@@ -113,7 +113,7 @@ export function createTable(userId: string, gameRaw: unknown, modeRaw: unknown, 
   if (!meta) throw new AppError(400, "Jeu inconnu.");
   if (!meta.modes.includes(mode)) throw new AppError(400, "Mode non disponible pour ce jeu.");
   if (currency !== "coris" && currency !== "lions") throw new AppError(400, "Monnaie inconnue.");
-  return transact((db) => {
+  return await transact((db) => {
     const u = getUser(db, userId);
     if (currency === "lions" && u.level !== "pro") throw new AppError(403, "Les parties en Lions sont réservées aux joueurs Pro.");
     const stake = stakeFor(currency);
@@ -161,8 +161,8 @@ export function createTable(userId: string, gameRaw: unknown, modeRaw: unknown, 
   });
 }
 
-export function joinTable(userId: string, tableId: string) {
-  return transact((db) => {
+export async function joinTable(userId: string, tableId: string) {
+  return await transact((db) => {
     const t = getTable(db, tableId);
     const u = getUser(db, userId);
     if (t.status !== "waiting") throw new AppError(400, "Cette table n'accepte plus de joueurs.");
@@ -183,8 +183,8 @@ export function joinTable(userId: string, tableId: string) {
   });
 }
 
-export function leaveTable(userId: string, tableId: string) {
-  return transact((db) => {
+export async function leaveTable(userId: string, tableId: string) {
+  return await transact((db) => {
     const t = getTable(db, tableId);
     const u = getUser(db, userId);
     if (t.status !== "waiting") throw new AppError(400, "La partie a déjà commencé : utilisez « Abandonner ».");
@@ -235,8 +235,8 @@ function forfeit(db: Db, t: TableRow, seat: number, reason: string) {
   settle(db, t, winner, false);
 }
 
-export function declineInvite(userId: string, tableId: string) {
-  return transact((db) => {
+export async function declineInvite(userId: string, tableId: string) {
+  return await transact((db) => {
     const t = getTable(db, tableId);
     if (t.status !== "waiting") throw new AppError(400, "Cette invitation n'est plus valable.");
     const invite = (t.invites ?? []).find((i) => i.userId === userId && i.status === "pending");
@@ -248,8 +248,8 @@ export function declineInvite(userId: string, tableId: string) {
 }
 
 /** L'hôte remplace un joueur qui a refusé, tant que la partie n'a pas commencé. */
-export function invitePlayer(userId: string, tableId: string, usernameRaw: unknown) {
-  return transact((db) => {
+export async function invitePlayer(userId: string, tableId: string, usernameRaw: unknown) {
+  return await transact((db) => {
     const t = getTable(db, tableId);
     const host = getUser(db, userId);
     if (t.createdBy !== host.id) throw new AppError(403, "Seul l'hôte peut inviter.");
@@ -268,9 +268,9 @@ export function invitePlayer(userId: string, tableId: string, usernameRaw: unkno
 }
 
 /** Joueurs libres pour la monnaie du mode choisi : assez de solde, pas déjà à une table. */
-export function listAvailablePlayers(userId: string, currencyRaw: unknown) {
+export async function listAvailablePlayers(userId: string, currencyRaw: unknown) {
   const currency: Currency = currencyRaw === "lions" ? "lions" : "coris";
-  const db = readDb();
+  const db = await readDb();
   const stake = stakeFor(currency);
   const busy = new Set<string>();
   for (const t of db.tables) {
@@ -293,13 +293,13 @@ export type TableAction =
   | { action: "decline" }
   | { action: "invite"; username: string };
 
-export function tableAction(userId: string, tableId: string, body: Record<string, unknown>) {
+export async function tableAction(userId: string, tableId: string, body: Record<string, unknown>) {
   const action = String(body.action ?? "");
   if (action === "join") return joinTable(userId, tableId);
   if (action === "leave") return leaveTable(userId, tableId);
   if (action === "decline") return declineInvite(userId, tableId);
   if (action === "invite") return invitePlayer(userId, tableId, body.username);
-  return transact((db) => {
+  return await transact((db) => {
     const t = getTable(db, tableId);
     if (t.status !== "playing") throw new AppError(400, "La partie n'est pas en cours.");
     const seat = t.seats.find((s) => s.userId === userId);
@@ -366,13 +366,13 @@ export function viewTable(t: TableRow, userId: string | null): TableView {
   };
 }
 
-export function getTableView(tableId: string, userId: string | null) {
-  const db = readDb();
+export async function getTableView(tableId: string, userId: string | null) {
+  const db = await readDb();
   return viewTable(getTable(db, tableId), userId);
 }
 
-export function listTables(userId: string) {
-  const db = readDb();
+export async function listTables(userId: string) {
+  const db = await readDb();
   const open = db.tables
     .filter((t) => t.status === "waiting" && (t.invites ?? []).length === 0 && !t.seats.some((s) => s.userId === userId))
     .slice(-50)

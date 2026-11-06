@@ -244,7 +244,7 @@ function normalize(db: Db): Db {
   return db;
 }
 
-export function readDb(): Db {
+function readDbFile(): Db {
   try {
     const raw = fs.readFileSync(DB_FILE, "utf8");
     return normalize({ ...emptyDb(), ...(JSON.parse(raw) as Db) });
@@ -254,18 +254,63 @@ export function readDb(): Db {
   }
 }
 
-function writeDb(db: Db) {
+function writeDbFile(db: Db) {
   fs.mkdirSync(DATA_DIR, { recursive: true });
   const tmp = DB_FILE + "." + process.pid + ".tmp";
   fs.writeFileSync(tmp, JSON.stringify(db));
   fs.renameSync(tmp, DB_FILE);
 }
 
+// Sur Vercel le dossier du projet est en lecture seule (/var/task). La base JSON
+// est alors un document dans Neon, pour que l'inscription et les parties survivent.
+const USE_POSTGRES = process.env.VERCEL === "1";
+
+let postgresReady: Promise<void> | null = null;
+
+async function postgres() {
+  const { prisma } = await import("./prisma");
+  postgresReady ??= prisma
+    .$executeRawUnsafe(
+      `CREATE TABLE IF NOT EXISTS app_documents (
+        id TEXT PRIMARY KEY,
+        body JSONB NOT NULL
+      )`,
+    )
+    .then(() => undefined);
+  await postgresReady;
+  return prisma;
+}
+
+async function readDbPostgres(): Promise<Db> {
+  const prisma = await postgres();
+  const rows = await prisma.$queryRawUnsafe<Array<{ body: Db | string }>>(
+    `SELECT body FROM app_documents WHERE id = 'db'`,
+  );
+  if (!rows.length) return emptyDb();
+  const body = rows[0].body;
+  const parsed = typeof body === "string" ? (JSON.parse(body) as Db) : body;
+  return normalize({ ...emptyDb(), ...parsed });
+}
+
+async function writeDbPostgres(db: Db) {
+  const prisma = await postgres();
+  await prisma.$executeRaw`INSERT INTO app_documents (id, body) VALUES ('db', ${JSON.stringify(db)}::jsonb) ON CONFLICT (id) DO UPDATE SET body = EXCLUDED.body`;
+}
+
+export async function readDb(): Promise<Db> {
+  return USE_POSTGRES ? readDbPostgres() : readDbFile();
+}
+
+async function writeDb(db: Db) {
+  if (USE_POSTGRES) await writeDbPostgres(db);
+  else writeDbFile(db);
+}
+
 /** Exécute fn sur la base ; écrit seulement si fn ne lève pas d'erreur. */
-export function transact<T>(fn: (db: Db) => T): T {
-  const db = readDb();
+export async function transact<T>(fn: (db: Db) => T): Promise<T> {
+  const db = await readDb();
   const result = fn(db);
-  writeDb(db);
+  await writeDb(db);
   return result;
 }
 
