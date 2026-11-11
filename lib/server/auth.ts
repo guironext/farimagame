@@ -11,7 +11,7 @@ import { CLERK_ENABLED } from "../clerk";
 import { fromUnits } from "../config";
 import { canManageMoney, type PublicUser, type Role } from "../types";
 
-/** En-tête utilisé UNIQUEMENT par les tests automatiques (scripts/test-paris.mjs), voir testUser(). */
+/** En-tête utilisé UNIQUEMENT par les tests automatiques, voir testUser(). */
 export const TEST_USER_HEADER = "x-farima-test-user";
 
 /**

@@ -5,7 +5,7 @@
 //  - en développement (`npm run dev`), même sans clé : Clerk passe en « keyless mode » et crée tout seul
 //    une application de test temporaire (clés rangées dans le dossier .clerk/, ignoré par git).
 // Sans clé en production, la connexion est désactivée (tout le monde est déconnecté) : les pages publiques
-// (accueil, paris, cotes) restent consultables, mais personne ne peut jouer ni parier.
+// (accueil) restent consultables, mais personne ne peut jouer.
 export const CLERK_ENABLED =
   Boolean(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY) ||
   (process.env.NODE_ENV !== "production" && !["1", "true"].includes(process.env.NEXT_PUBLIC_CLERK_KEYLESS_DISABLED ?? ""));
@@ -16,7 +16,7 @@ export const AFTER_SIGN_IN_URL = "/salon";
 export const AFTER_SIGN_UP_URL = "/tableau-de-bord?bienvenue=1";
 
 /** Pages réservées aux joueurs connectés (les API vérifient aussi la connexion de leur côté). */
-const PROTECTED_PREFIXES = ["/tableau-de-bord", "/portefeuille", "/passer-pro", "/pro", "/salon", "/jeu", "/paris/mes-paris", "/maison", "/admin"];
+const PROTECTED_PREFIXES = ["/tableau-de-bord", "/portefeuille", "/passer-pro", "/pro", "/salon", "/jeu", "/maison", "/admin"];
 
 export function isProtectedPath(pathname: string) {
   return PROTECTED_PREFIXES.some((p) => pathname === p || pathname.startsWith(p + "/"));

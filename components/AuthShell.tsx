@@ -1,11 +1,11 @@
 // Mise en page des écrans de connexion / inscription (le formulaire lui-même est fourni par Clerk).
 import Link from "next/link";
-import { SIGNUP_BONUS_CORIS, STAKE_CORIS, STAKE_CORIS_RUN } from "@/lib/config";
+import { SIGNUP_BONUS_CORIS, STAKE_CORIS } from "@/lib/config";
 
 const PERKS = [
   { icon: "🎁", title: `${SIGNUP_BONUS_CORIS} Coris offerts`, text: "crédités automatiquement à la création du compte" },
-  { icon: "🎲", title: "Ludo, Dames, Awalé, Échecs, Run, Course", text: `contre l'ordinateur ou entre amis, ${STAKE_CORIS} Coris la partie, ${STAKE_CORIS_RUN} pour Endless Run et Course auto` },
-  { icon: "⚽", title: "Paris sportifs", text: "ligues européennes, Ligue des champions, matchs africains" },
+  { icon: "🎲", title: "Ludo, Dames, Awalé, Échecs", text: `contre l'ordinateur ou entre amis, ${STAKE_CORIS} Coris la partie` },
+  { icon: "🦁", title: "Niveau Pro", text: "convertissez vos Coris en Lions et retirez vos gains en F CFA" },
   { icon: "🔒", title: "Compte sécurisé", text: "connexion protégée par Clerk (e-mail, mot de passe, Google…)" },
 ];
 
@@ -21,13 +21,13 @@ export function AuthShell({ mode, children }: { mode: "login" | "register"; chil
             </>
           ) : (
             <>
-              Jouez. Pariez. <span className="text-gradient-brand">Gagnez.</span>
+              Jouez. <span className="text-gradient-brand">Gagnez.</span>
             </>
           )}
         </h1>
         <p className="mt-2 max-w-md text-sm text-slate-400 sm:text-base">
           {mode === "login"
-            ? "Retrouvez vos parties, vos paris et vos portefeuilles Coris, Lions et F CFA."
+            ? "Retrouvez vos parties et vos portefeuilles Coris, Lions et F CFA."
             : "Créez votre compte joueur en quelques secondes et recevez vos Coris de bienvenue."}
         </p>
         <ul className="mt-6 grid gap-2.5 sm:grid-cols-2 lg:grid-cols-1">

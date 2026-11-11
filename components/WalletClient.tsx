@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import { api, fmtDate, idParam } from "@/lib/client";
+import { api, fmtDate } from "@/lib/client";
 import { OPERATORS, formatPhone, operatorName } from "@/lib/payments/types";
 import type { MobileOperator, PaymentStatus, PaymentView, PublicUser, TxView } from "@/lib/types";
 import { useSession } from "./SessionProvider";
@@ -76,7 +76,7 @@ export function WalletClient() {
 
   return (
     <div className="space-y-6">
-      <PageTitle title="💳 Mon portefeuille" subtitle="Votre solde en F CFA pour les paris sportifs : dépôt Mobile Money, retrait et conversion de vos Lions." />
+      <PageTitle title="💳 Mon portefeuille" subtitle="Dépôt Mobile Money, retrait et conversion de vos Lions en F CFA." />
 
       {data.provider.isSimulation && (
         <div className="flex items-start gap-3 rounded-xl border border-amber-400/30 bg-amber-400/10 px-4 py-3 text-sm text-amber-100">
@@ -92,9 +92,8 @@ export function WalletClient() {
         <Card className="border-emerald-400/30 bg-gradient-to-br from-emerald-500/20 via-emerald-500/5 to-transparent md:col-span-1">
           <div className="text-sm text-slate-300">Solde F CFA</div>
           <div className="mt-1 text-4xl"><Money amount={me.fcfa} currency="fcfa" className="text-emerald-300" /></div>
-          <div className="mt-4 flex gap-2">
-            <ButtonLink href="/paris" className="px-4 py-2">⚽ Parier</ButtonLink>
-            <ButtonLink href="/paris/mes-paris" variant="ghost" className="px-4 py-2">Mes paris</ButtonLink>
+          <div className="mt-4">
+            <ButtonLink href="/passer-pro" variant="pro" className="px-4 py-2">🦁 Acheter des Lions</ButtonLink>
           </div>
         </Card>
         <Card>
@@ -252,9 +251,7 @@ export function WalletClient() {
                   {data.transactions.map((t) => (
                     <tr key={t.id}>
                       <td className="py-2 pr-2 text-xs text-slate-400">{fmtDate(t.createdAt)}</td>
-                      <td className="pr-2">
-                        {t.matchId ? <Link href={`/paris/match/${idParam(t.matchId)}`} className="hover:text-amber-200">{t.label}</Link> : t.label}
-                      </td>
+                      <td className="pr-2">{t.label}</td>
                       <td className={cx("whitespace-nowrap text-right", t.amount >= 0 ? "text-emerald-300" : "text-rose-300")}>
                         <Money amount={t.amount} currency={t.currency} signed />
                       </td>

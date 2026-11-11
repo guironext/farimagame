@@ -9,10 +9,10 @@ export function Footer() {
             Farima<span className="text-brand">Game</span>
           </div>
           <p className="mt-2 max-w-xs text-sm text-slate-400">
-            Jeux de société africains et classiques, et paris sportifs en pari mutuel. Jeux : 80 % des mises au gagnant. Paris sportifs : 90 % du pot aux gagnants.
+            Jeux de société africains et classiques. Le gagnant empoche 80 % des mises.
           </p>
         </div>
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-2 gap-4">
           <FooterCol
             title="Jouer"
             links={[
@@ -20,22 +20,13 @@ export function Footer() {
               ["/salon?jeu=dames", "Dames"],
               ["/salon?jeu=awale", "Awalé"],
               ["/salon?jeu=echecs", "Échecs"],
-              ["/salon?jeu=run", "Endless Run"],
-              ["/salon?jeu=course", "Course auto"],
-            ]}
-          />
-          <FooterCol
-            title="Parier"
-            links={[
-              ["/paris", "Matchs"],
-              ["/paris/mes-paris", "Mes paris"],
-              ["/portefeuille", "Portefeuille"],
             ]}
           />
           <FooterCol
             title="Compte"
             links={[
               ["/tableau-de-bord", "Tableau de bord"],
+              ["/portefeuille", "Portefeuille"],
               ["/passer-pro", "Passez Pro"],
               ["/inscription", "Inscription"],
             ]}
@@ -44,7 +35,7 @@ export function Footer() {
       </div>
       <div className="border-t border-line">
         <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-2 px-4 py-5 text-center text-xs text-slate-500 sm:flex-row sm:text-left">
-          <span>© FarimaGame · Jeux 80/20 · Paris 90/10</span>
+          <span>© FarimaGame · Jeux 80/20</span>
           <span className="flex items-center gap-2">
             <span className="rounded-md border border-rose-400/40 px-1.5 py-0.5 font-bold text-rose-300">18+</span>
             Jouez de façon responsable.

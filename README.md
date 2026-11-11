@@ -1,4 +1,4 @@
-# FarimaGame — plateforme de jeux (Ludo, Dames, Awalé, Échecs) et paris sportifs
+# FarimaGame — plateforme de jeux (Ludo, Dames, Awalé, Échecs)
 
 Application Next.js 16 (App Router, React 19, Tailwind CSS v4, TypeScript) qui tourne **entièrement en local**,
 sans base de données externe.
@@ -40,9 +40,9 @@ en français, aux couleurs de FarimaGame ; menu « Mon compte et sécurité » e
   Ces clés sont **obligatoires en production** (`npm run build` + `npm start`) : sans elles, la connexion est désactivée.
 - **Fiche joueur** : à la première visite d'un compte Clerk connecté, FarimaGame crée automatiquement sa fiche dans
   `data/db.json` (rôle JOUEUR, **500 Coris** de bienvenue, pseudo tiré du pseudo Clerk, sinon du prénom, sinon du début
-  de l'e-mail, rendu unique : gerard, gerard2…), reliée au compte par `clerkId`. Portefeuilles, paris et parties ne changent pas.
+  de l'e-mail, rendu unique : gerard, gerard2…), reliée au compte par `clerkId`. Portefeuilles et parties ne changent pas.
 - **Anciens comptes à mot de passe** : conservés dans la base (soldes et historique), mais ils ne peuvent plus se connecter.
-- Pages réservées (`/tableau-de-bord`, `/portefeuille`, `/pro`, `/salon`, `/jeu`, `/paris/mes-paris`, `/maison`, `/admin`) :
+- Pages réservées (`/tableau-de-bord`, `/portefeuille`, `/passer-pro`, `/pro`, `/salon`, `/jeu`, `/maison`, `/admin`) :
   un visiteur est redirigé vers `/connexion` par `proxy.ts` ; les API renvoient 401 / 403.
 
 ## Pages
@@ -54,13 +54,10 @@ en français, aux couleurs de FarimaGame ; menu « Mon compte et sécurité » e
 | Tableau de bord (soldes, statistiques, historique) | `/tableau-de-bord` |
 | Salon de jeu (lobby) | `/salon` |
 | Partie | `/jeu/<id>` |
-| Niveau Pro & conversion Coris → Lions | `/pro` |
-| Paris sportifs (matchs par compétition, pots en direct) | `/paris` |
-| Détail d'un match (marchés, ticket de pari) | `/paris/match/<id>` |
-| Mes paris (en cours / gagnés / perdus / remboursés) | `/paris/mes-paris` |
+| Niveau Pro & conversion Coris → Lions | `/pro`, `/passer-pro` |
 | Portefeuille F CFA (dépôt, retrait, conversion Lions → F CFA, historique) | `/portefeuille` |
-| Administration des paris (**ADMIN**) | `/admin/paris` |
-| La Maison – commissions, caisse (**ADMIN**) | `/maison` |
+| Comptes utilisateurs (**ADMIN**) | `/admin` |
+| La Maison – commissions, caisse, validation des retraits (**Maison**) | `/maison` |
 
 ## Règles de l'argent virtuel
 
@@ -94,13 +91,13 @@ Tous les paramètres sont dans `lib/config.ts`.
 6. Quitter une table **avant le début** de la partie rembourse la mise.
 7. La conversion porte sur n'importe quels Coris du solde (y compris le bonus), par nombre entier de Lions.
    Un joueur Pro peut continuer à jouer en Coris.
-8. Les Coris et les Lions restent une monnaie virtuelle de jeu. Le F CFA (paris sportifs) est décrit ci-dessous ;
+8. Les Coris et les Lions restent une monnaie virtuelle de jeu. Le F CFA sert aux dépôts, aux retraits et à l'achat de Lions ;
    dans cette version, **tous les paiements sont simulés**.
 
 ## Rôles
 
 - **JOUEUR** : rôle par défaut.
-- **ADMIN** : accès à `/admin/paris` (règlement des matchs, retraits, commissions) et à `/maison`.
+- **ADMIN** : accès à `/admin` (comptes, invitations) et, avec le rôle Maison, à `/maison`.
   - Recommandé : `ADMIN_EMAILS=vous@exemple.com,associe@exemple.com` dans `.env.local` (e-mails des comptes Clerk).
     On peut aussi utiliser `ADMIN_USERNAMES` (pseudos FarimaGame). Si l'une de ces variables est définie, **seuls** ces comptes sont ADMIN.
   - Sinon, le **premier compte Clerk** qui se connecte devient ADMIN s'il n'existe encore aucun administrateur relié à Clerk
@@ -108,7 +105,7 @@ Tous les paramètres sont dans `lib/config.ts`.
 
 ## Portefeuille F CFA (XOF)
 
-Troisième solde, en **francs CFA entiers**, utilisé pour les paris sportifs. Deux façons de l'alimenter :
+Troisième solde, en **francs CFA entiers**. Deux façons de l'alimenter :
 
 1. **Convertir des Lions en F CFA** (joueurs **Pro** uniquement, par Lion entier) au taux `FCFA_PER_LION`
    (**500 F CFA par Lion par défaut — HYPOTHÈSE à fixer par vous**).
@@ -118,119 +115,16 @@ Troisième solde, en **francs CFA entiers**, utilisé pour les paris sportifs. D
    (un numéro finissant par `0000` simule un refus de l'opérateur).
 
 **Retrait** : le joueur demande un retrait vers son numéro Mobile Money ; le montant est débité (bloqué) tout de suite,
-puis un ADMIN le **valide** ou le **refuse** (le montant est alors restitué) depuis `/admin/paris` → onglet Retraits.
+puis un compte Maison le **valide** ou le **refuse** (le montant est alors restitué) depuis `/maison`.
 Simulation également : rien n'est réellement envoyé.
 
-Chaque opération est inscrite dans le journal des transactions (dépôt, retrait, retrait annulé, conversion, pari,
-gain de pari, remboursement) et dans la liste des paiements (`payments` dans `data/db.json`).
+Chaque opération est inscrite dans le journal des transactions (dépôt, retrait, retrait annulé, conversion)
+et dans la liste des paiements (`payments` dans `data/db.json`).
 
 **Brancher un vrai agrégateur de paiement** (CinetPay, PayDunya, Hub2, FedaPay…) : implémentez l'interface
 `PaymentProvider` (`lib/payments/types.ts` : `collect` pour encaisser, `payout` pour envoyer), enregistrez-la dans
 `lib/payments/index.ts` et lancez avec `PAYMENT_PROVIDER=<id>`. Un vrai fournisseur répond souvent « en attente » :
 il faudra alors ajouter une route de **webhook** qui confirme le paiement et crédite le solde.
-
-## Paris sportifs (football)
-
-**Compétitions** : Premier League, LaLiga, Serie A, Bundesliga, Ligue 1, Ligue des champions UEFA, Coupe d'Afrique
-des Nations (CAN), Ligue des champions CAF, Ligue 1 ivoirienne, éliminatoires de la Coupe du monde (zones Afrique et
-Europe) et éliminatoires de la CAN. Liste et filtres dans `/paris` (onglets Ligues européennes / Ligue des champions /
-Matchs africains / Éliminatoires, puis par compétition, et À venir / En cours / Résultats).
-
-**Marchés** : Résultat 1 N 2 (temps réglementaire), Les deux équipes marquent (Oui / Non), Plus / Moins de 2,5 buts.
-
-**Pari mutuel** (par match et par marché) :
-
-- Mise en F CFA entiers, de `BET_MIN_FCFA` (100 F) à `BET_MAX_FCFA` (100 000 F). On peut faire plusieurs paris.
-- Toutes les mises d'un marché forment un **pot**. Au règlement, la **maison garde 10 %**, les **gagnants se partagent
-  90 %** au prorata de leur mise (arrondi au franc inférieur ; les centimes restants vont à la maison).
-  Exemple : 6 000 F dans le pot, 4 000 F sur l'issue gagnante → 5 400 F à partager ; celui qui a misé 3 000 F reçoit 4 050 F.
-- **Toutes les issues affichent une cote** (jamais « — »), voir « Cotes » ci-dessous. C'est une **estimation** :
-  en pari mutuel, le gain réel est fixé par le pot final. Le ticket reprend la cote affichée et calcule le gain estimé
-  (mise × cote), libellé « estimation ».
-- Les paris **ferment au coup d'envoi**.
-- **Remboursement intégral** (sans commission) si : le match est **reporté ou annulé** ; **personne n'a misé sur l'issue
-  gagnante** ; ou **tout le monde a misé sur l'issue gagnante** (aucun perdant — sinon les gagnants perdraient 10 %).
-  Conséquence : un parieur seul sur un marché est toujours remboursé.
-- **Règlement automatique** : à chaque consultation des matchs, la liste est synchronisée avec la source de données
-  (au plus toutes les minutes en démo, toutes les 15 minutes avec API-Football) et chaque match terminé, reporté ou
-  annulé est réglé une seule fois. Un ADMIN peut aussi fixer le score final (ou déclarer le match reporté / annulé)
-  depuis `/admin/paris` : le résultat manuel n'est plus écrasé par la synchronisation. Un match réglé ne l'est
-  qu'une fois (une correction de score ultérieure par la source est ignorée).
-
-### Cotes
-
-La cote affichée pour chaque issue mélange une **cote de référence** et la **cote du pot** :
-
-1. **Cote de référence** (probabilité « juste » `r`, sans marge) :
-   - **Cotes bookmakers** (étiquette verte) si `ODDS_API_KEY` est défini et que le match est trouvé chez
-     [The Odds API](https://the-odds-api.com) : pour chaque issue on prend la **cote médiane** des bookmakers (région `eu`),
-     on retire leur marge (`r = (1/cote) ÷ Σ(1/cotes)`), puis on applique **notre** marge de 10 % (étape 3). Nos cotes sont
-     donc un peu plus basses que celles des bookmakers (≈ 5 % de marge chez eux, 10 % chez nous), ce qui reste cohérent
-     avec le règlement 90/10. Marchés utilisés : `h2h` (1 N 2) et `totals` (ligne 2,5). « Les deux équipes marquent »
-     n'existe pas dans l'offre de base : il est déduit des buts attendus calés sur ces cotes (modèle ci-dessous).
-   - **Cotes FarimaGame** (étiquette grise) sinon (pas de clé, match non trouvé, compétition non couverte, erreur d'API) :
-     modèle `lib/odds/model.ts` à partir de la **note de force** de chaque équipe (`lib/odds/teams.ts`, ~250 équipes,
-     note par défaut par compétition pour les inconnues) :
-     - écart `d = note_dom + avantage du terrain − note_ext ± 20` (petite « forme du jour » déterministe par match) ;
-     - buts attendus `λdom = (T + 0,0035·d)/2`, `λext = (T − 0,0035·d)/2` (T = moyenne de buts de la compétition) ;
-     - grille de scores de Poisson avec correction Dixon-Coles (ρ = −0,10) → 1 N 2, les deux équipes marquent, +/- 2,5 buts.
-2. **Cote du pot** : part des mises `m = mises sur l'issue ÷ pot`.
-3. **Mélange** : `w = pot ÷ (pot + K)` avec `K = BET_ODDS_BLEND_K` (20 000 F par défaut) ;
-   `p = (1 − w)·r + w·m` ; **cote = 0,9 ÷ p** (arrondie au centième, entre 1,01 et 250).
-   Sans mise, la cote de référence s'affiche telle quelle ; avec un pot de 20 000 F, référence et pot comptent autant ;
-   avec un très gros pot, la cote rejoint la cote du pot (= le vrai pari mutuel). La somme des `1/cote` d'un marché
-   vaut toujours ≈ 1/0,9 ≈ 1,111 (marge de 10 %).
-4. **Règlement inchangé** : pari mutuel 90/10 sur le pot final, mêmes règles de remboursement.
-
-**Activer les vraies cotes bookmakers** :
-
-1. Créez une clé gratuite sur https://the-odds-api.com (offre gratuite : 500 crédits/mois).
-2. Ajoutez dans `.env.local` (à la racine du projet, voir `.env.local.example`) : `ODDS_API_KEY=votre_cle`
-3. Relancez le serveur : arrêtez `npm run dev` (Ctrl+C) puis relancez `npm run dev`.
-4. Vérifiez dans `/admin/paris` (bloc « Cotes de référence ») : statut, dernière mise à jour, crédits restants.
-
-⚠️ Les cotes bookmakers ne s'appliquent qu'aux **vrais matchs** : avec les matchs de démonstration (fictifs), aucun
-match ne peut correspondre, donc l'API n'est pas appelée (pour ne pas gaspiller de crédits) et les cotes FarimaGame
-restent affichées. Activez aussi `API_FOOTBALL_KEY` pour les vrais matchs.
-
-Compétitions couvertes par The Odds API (clés vérifiées sur la liste publique des sports) : Premier League
-`soccer_epl`, LaLiga `soccer_spain_la_liga`, Serie A `soccer_italy_serie_a`, Bundesliga `soccer_germany_bundesliga`,
-Ligue 1 `soccer_france_ligue_one`, Ligue des champions `soccer_uefa_champs_league`, CAN `soccer_africa_cup_of_nations`,
-éliminatoires CdM Europe `soccer_fifa_world_cup_qualifiers_europe`. **Non couvertes** (cotes FarimaGame) : Ligue des
-champions CAF, Ligue 1 ivoirienne, éliminatoires CdM Afrique, éliminatoires CAN. Une clé peut être ajoutée ou
-remplacée sans toucher au code : `ODDS_API_SPORTS=wcq-afr=soccer_xxx`.
-
-**Rapprochement des matchs** : même compétition, mêmes équipes (noms normalisés : accents, « FC », « AS »… ignorés, plus
-une table d'alias français/anglais, ex. « FC Barcelone » = « Barcelona », « Côte d'Ivoire » = « Ivory Coast ») et coup
-d'envoi à moins de 6 h d'écart.
-
-**Quota / cache** : l'API n'est **jamais** appelée à chaque page vue. Les réponses sont gardées dans `data/db.json`
-(clé `oddsApi`) et rafraîchies en arrière-plan quand le cache est périmé, uniquement pour les compétitions ayant un
-match ouvert dans les 7 jours. Un appel coûte 2 crédits par compétition (`h2h,totals` × 1 région). Le prochain
-rafraîchissement est planifié pour répartir les crédits restants (en-tête `x-requests-remaining`) jusqu'à la fin du
-mois, avec un minimum de `ODDS_API_REFRESH_MINUTES` (15 min) : avec l'offre gratuite et 8 compétitions, cela fait
-environ un rafraîchissement par jour ; avec une offre payante, toutes les 15 minutes. Les cotes d'avant-match d'un
-match commencé sont figées. Clé refusée (401) ou quota épuisé (429) : arrêt immédiat, nouvel essai 30 min plus tard,
-cotes FarimaGame en attendant. La clé n'est jamais affichée ni écrite dans la base.
-
-**Source des matchs** (`lib/sports`, interface `SportsProvider`) :
-
-- **Démo (par défaut)** : matchs **fictifs** avec de vrais noms d'équipes, générés de 3 jours avant à 14 jours après la
-  date du jour selon un calendrier réaliste (week-end pour les championnats, mardi/mercredi pour la LDC…). Un match démo
-  reçoit un score fictif 2 h après le coup d'envoi (≈ 4 % sont « reportés »), ce qui déclenche le règlement automatique.
-  Tous les écrans affichent clairement « Données de démonstration ».
-- **API-Football** (api-sports.io) : activé dès que `API_FOOTBALL_KEY` est défini, par ex. dans un fichier `.env.local` :
-  ```
-  API_FOOTBALL_KEY=votre_cle
-  # facultatif :
-  API_FOOTBALL_SEASON=2026
-  API_FOOTBALL_LEAGUES=ci-ligue1=386,canq=36
-  ```
-  Une synchronisation = 1 requête par compétition (12), au plus toutes les 15 minutes. Les identifiants de compétitions
-  sont dans `lib/sports/competitions.ts` : **vérifiez-les** dans votre tableau de bord API-Football
-  (ou `GET /leagues?search=...`), surtout Ligue 1 ivoirienne, éliminatoires et CAN, puis corrigez-les au besoin avec
-  `API_FOOTBALL_LEAGUES`. L'offre gratuite d'API-Football est limitée (≈ 100 requêtes/jour et saisons restreintes).
-  Ce connecteur n'a pas pu être testé sans clé.
 
 ## Configuration (`lib/config.ts`, modifiable aussi par variables d'environnement)
 
@@ -239,43 +133,18 @@ cotes FarimaGame en attendant. La clé n'est jamais affichée ni écrite dans la
 | `FCFA_PER_LION` | 500 | Valeur d'1 Lion en F CFA (**hypothèse à fixer**) |
 | `DEPOSIT_MIN_FCFA` / `DEPOSIT_MAX_FCFA` | 200 / 500 000 | Limites d'un dépôt |
 | `WITHDRAW_MIN_FCFA` / `WITHDRAW_MAX_FCFA` | 500 / 500 000 | Limites d'un retrait |
-| `BET_MIN_FCFA` / `BET_MAX_FCFA` | 100 / 100 000 | Limites d'une mise |
-| `BET_WINNERS_SHARE` / `BET_HOUSE_SHARE` | 90 % / 10 % | Partage du pot des paris sportifs (`BET_WINNERS_SHARE` réglable par variable d’environnement) |
 | `PAYMENT_PROVIDER` | `simulation` | Fournisseur de paiement |
 | `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` / `CLERK_SECRET_KEY` | (vide = keyless en dev) | Clés Clerk (connexion / inscription) |
 | `ADMIN_EMAILS` | (vide) | E-mails des comptes administrateurs (Clerk) |
 | `ADMIN_USERNAMES` | (vide) | Pseudos des comptes administrateurs |
-| `API_FOOTBALL_KEY` | (vide) | Active les vrais matchs |
-| `ODDS_API_KEY` | (vide) | Active les vraies cotes bookmakers (The Odds API) |
-| `ODDS_API_REFRESH_MINUTES` | 15 | Délai minimal entre deux rafraîchissements des cotes |
-| `BET_ODDS_BLEND_K` | 20 000 | Taille du pot (F CFA) à partir de laquelle le pot pèse autant que la cote de référence |
 | `FARIMA_DATA_DIR` | `./data` | Dossier de la base (utile pour une base de test) |
 
 ## ⚠️ Avant toute mise en ligne avec de l'argent réel
 
-- En Côte d'Ivoire, les **paris sportifs en argent réel** sont un monopole encadré par l'État : il faut un
-  **agrément / une licence d'opérateur (LONACI)** avant d'ouvrir le service au public. Faites valider le projet par un juriste.
 - Les dépôts, retraits et conversions sont **simulés** dans cette version : aucun argent réel n'est encaissé ni versé.
-  Rendre les Lions ou les F CFA convertibles en argent réel change le statut juridique de la plateforme.
+  Rendre les Lions ou les F CFA convertibles en argent réel change le statut juridique de la plateforme. Faites valider le projet par un juriste.
 - Il faudra aussi : un vrai agrégateur de paiement avec webhooks, une vérification d'identité (KYC) et de l'âge (18 ans),
   des limites de jeu responsable, une base de données de production et un audit de sécurité.
-
-## Test de bout en bout des paris
-
-```bash
-node scripts/test-paris.mjs
-```
-
-Le script lance lui-même un serveur `next dev` de test (port 3100, base temporaire, dossier `.next-test`) à côté de votre
-`npm run dev`. Les comptes de test s'y connectent par l'en-tête `x-farima-test-user` au lieu de Clerk : ce raccourci
-n'existe qu'en développement avec `FARIMA_TEST_AUTH=1` **et** une base `FARIMA_DATA_DIR` séparée, et il est retiré du code
-par `next build` (impossible à utiliser en production).
-
-Test des cotes (lance lui-même des serveurs de test avec une base temporaire et un faux serveur The Odds API) :
-
-```bash
-npm run build && node scripts/test-odds.mjs
-```
 
 ## Les jeux
 
@@ -310,19 +179,12 @@ app/                 pages + API (route handlers)
   api/wallet         historique et statistiques
   api/pro            passage Pro et conversion
   api/tables         liste / création de tables ; api/tables/[id] : rejoindre, quitter, jouer, abandonner
-  api/house          caisse de la maison (ADMIN)
+  api/house          caisse de la maison et validation des retraits (Maison)
   api/portefeuille   solde F CFA : dépôt, retrait, conversion Lions -> F CFA
-  api/paris          matchs ; api/paris/match/[id] : détail ; api/paris/bets : mes paris / parier
-  api/admin/paris    règlement des matchs, retraits, synchronisation (ADMIN)
 components/          interface (plateaux de jeu dans components/games)
 lib/games/           moteurs de règles (purs, partagés client/serveur) + IA
-lib/server/          base JSON, authentification, portefeuille, tables, paris (betting.ts), paiements (payments.ts)
-lib/sports/          sources de matchs : démo (demo.ts) et API-Football (apiFootball.ts), compétitions
+lib/server/          base JSON, authentification, portefeuille, tables, paiements (payments.ts)
 lib/payments/        fournisseurs Mobile Money (simulation) et interface pour un vrai agrégateur
-lib/betting.ts       marchés, issues, cotes affichées (mélange référence / pot, partagé client/serveur)
-lib/odds/            modèle de cotes FarimaGame (model.ts), notes des équipes (teams.ts), The Odds API (oddsApi.ts)
-lib/server/odds.ts   cotes de référence d'un match + cache / planification des appels à The Odds API
-scripts/             tests de bout en bout des paris (test-paris.mjs) et des cotes (test-odds.mjs + fixtures/)
 lib/config.ts        paramètres économiques
 lib/clerk.ts         réglages Clerk (pages réservées, URLs) ; lib/clerk-appearance.ts : thème et textes FR
 proxy.ts             session Clerk + redirection des pages réservées vers /connexion
@@ -337,8 +199,5 @@ data/db.json         base de données locale (créée automatiquement, ignorée 
 
 - Synchronisation multijoueur par polling (une version WebSocket serait plus réactive).
 - Base JSON adaptée à un usage local / démo ; pour la production, passer à PostgreSQL ou SQLite.
-- Paris sportifs : pari mutuel simple (les cotes affichées sont des estimations, pas des cotes fixes ; pas de paris combinés, pas de cash-out, pas de paris en direct).
-- Les notes de force des équipes (`lib/odds/teams.ts`) sont des estimations à ajuster ; le connecteur The Odds API a été testé avec des réponses simulées (pas de clé réelle).
-- Les matchs démo sont fictifs ; le connecteur API-Football n'a pas été testé sans clé.
 - Paiements Mobile Money simulés (pas de webhook, pas de KYC).
 - Pas de minuterie par coup (seulement la réclamation après 2 minutes d'inactivité).

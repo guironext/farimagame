@@ -6,23 +6,17 @@
 import fs from "node:fs";
 import path from "node:path";
 import type {
-  BetStatus,
   Currency,
   GameCurrency,
   GameId,
   Level,
-  LiveInfo,
-  MarketId,
-  MatchStatus,
   MobileOperator,
   Mode,
   PaymentKind,
   PaymentStatus,
   Role,
-  Selection,
   TableStatus,
 } from "../types";
-import type { OddsCache } from "./odds";
 
 export interface UserRow {
   id: string;
@@ -138,44 +132,6 @@ export interface TableRow {
   version: number;
 }
 
-/** Match de football (copie locale des données du fournisseur, ou corrigée par l'admin). */
-export interface MatchRow {
-  id: string; // ex. "demo:epl:2026-10-10:0" ou "af:1234567"
-  source: "demo" | "api-football" | "manuel";
-  competitionId: string;
-  home: string;
-  away: string;
-  homeLogo?: string;
-  awayLogo?: string;
-  kickoff: string; // ISO
-  status: MatchStatus;
-  score: { home: number; away: number } | null;
-  /** Score en direct, minute, période, buteurs (affichage uniquement ; le règlement utilise score). */
-  live?: LiveInfo;
-  round?: string;
-  venue?: string;
-  /** true si l'admin a fixé le résultat / statut : la synchronisation ne l'écrase plus. */
-  manual?: boolean;
-  settledAt?: string;
-  /** Résultat du règlement par marché. */
-  settlement?: Partial<Record<MarketId, { winner: Selection | null; pool: number; commission: number; refunded: boolean; reason?: string }>>;
-  updatedAt: string;
-}
-
-export interface BetRow {
-  id: string;
-  userId: string;
-  matchId: string;
-  market: MarketId;
-  selection: Selection;
-  stake: number; // centièmes de F CFA
-  status: BetStatus;
-  payout: number; // centièmes (versé au règlement)
-  note?: string;
-  createdAt: string;
-  settledAt?: string;
-}
-
 export interface PaymentRow {
   id: string;
   userId: string;
@@ -210,21 +166,7 @@ export interface Db {
   staffInvites: StaffInvite[];
   house: { coris: number; lions: number; fcfa: number; ledger: HouseTxRow[] };
   tables: TableRow[];
-  matches: MatchRow[];
-  bets: BetRow[];
   payments: PaymentRow[];
-  sports: {
-    provider?: string;
-    lastSyncAt?: string;
-    lastError?: string;
-    /** Dernier rafraîchissement « en direct » (API-Football /fixtures?ids=…). */
-    lastLiveAt?: string;
-    lastLiveError?: string;
-    /** Suivi du quota quotidien API-Football (remis à zéro chaque jour à 00:00 UTC). */
-    quota?: { day: string; used: number; remaining?: number | null; limit?: number | null };
-  };
-  /** Cache des cotes bookmakers (The Odds API). */
-  oddsApi?: OddsCache;
 }
 
 const DATA_DIR = process.env.FARIMA_DATA_DIR ? path.resolve(process.env.FARIMA_DATA_DIR) : path.join(process.cwd(), "data");
@@ -238,10 +180,7 @@ function emptyDb(): Db {
     staffInvites: [],
     house: { coris: 0, lions: 0, fcfa: 0, ledger: [] },
     tables: [],
-    matches: [],
-    bets: [],
     payments: [],
-    sports: {},
   };
 }
 
@@ -255,6 +194,11 @@ function normalize(db: Db): Db {
     if (u.role !== "ADMIN" && u.role !== "HOME" && u.role !== "MANAGER") u.role = "JOUEUR";
   }
   for (const t of db.tables) t.invites ??= [];
+  const legacy = db as Db & { matches?: unknown; bets?: unknown; sports?: unknown; oddsApi?: unknown };
+  delete legacy.matches;
+  delete legacy.bets;
+  delete legacy.sports;
+  delete legacy.oddsApi;
   // Le premier administrateur est désigné à la création du compte (voir provisionUser dans wallet.ts).
   return db;
 }

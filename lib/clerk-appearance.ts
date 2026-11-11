@@ -52,7 +52,7 @@ export const clerkLocalization = {
   ...frFR,
   signIn: {
     ...frFR.signIn,
-    start: { ...frFR.signIn?.start, title: "Connexion à FarimaGame", subtitle: "Content de vous revoir ! Connectez-vous pour jouer et parier." },
+    start: { ...frFR.signIn?.start, title: "Connexion à FarimaGame", subtitle: "Content de vous revoir ! Connectez-vous pour jouer." },
   },
   signUp: {
     ...frFR.signUp,

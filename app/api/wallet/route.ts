@@ -22,7 +22,6 @@ export async function GET() {
         amount: fromUnits(t.amount),
         balanceAfter: fromUnits(t.balanceAfter),
         tableId: t.tableId,
-        matchId: t.matchId,
         createdAt: t.createdAt,
       }));
     const finished = db.tables.filter((t) => t.status === "finished" && t.seats.some((s) => s.userId === userId));

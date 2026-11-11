@@ -1,12 +1,10 @@
 import Link from "next/link";
-import { FeaturedMatches } from "@/components/home/FeaturedMatches";
 import { HomeCta } from "@/components/HomeCta";
 import { IconChevronRight } from "@/components/icons";
 import { LogoVideo } from "@/components/LogoVideo";
 import { ButtonLink } from "@/components/ui";
 import { GAME_LIST } from "@/lib/games/meta";
-import { CORIS_PER_LION, FCFA_PER_LION, PRO_STAKE_LIONS, SIGNUP_BONUS_CORIS, STAKE_CORIS, STAKE_CORIS_RUN } from "@/lib/config";
-import { COMPETITIONS } from "@/lib/sports/competitions";
+import { CORIS_PER_LION, FCFA_PER_LION, PRO_STAKE_LIONS, SIGNUP_BONUS_CORIS, STAKE_CORIS } from "@/lib/config";
 
 export default function Home() {
   return (
@@ -30,19 +28,19 @@ export default function Home() {
             {SIGNUP_BONUS_CORIS} Coris offerts à l&apos;inscription
           </span>
           <h1 className="mt-4 text-[2.6rem] font-black leading-[1.02] tracking-tight sm:text-6xl">
-            Jouez. Pariez.
+            Jouez.
             <br />
             <span className="text-gradient-brand">Gagnez.</span>
           </h1>
           <p className="mx-auto mt-4 max-w-md text-base text-slate-300 sm:text-lg md:mx-0">
-            Ludo, Dames, Awalé, Échecs, Endless Run, Course auto et paris sur le football africain et européen. Le gagnant empoche{" "}
+            Ludo, Dames, Awalé et Échecs. Le gagnant empoche{" "}
             <strong className="text-white">80 % des mises</strong>.
           </p>
           <HomeCta />
           <dl className="mx-auto mt-7 grid max-w-md grid-cols-3 divide-x divide-white/10 rounded-2xl border border-line bg-white/[0.03] py-3 md:mx-0">
-            <Stat value="6" label="jeux" />
+            <Stat value="4" label="jeux" />
             <Stat value="80 %" label="au gagnant" />
-            <Stat value={String(COMPETITIONS.length)} label="compétitions" />
+            <Stat value="Pro" label="en Lions" />
           </dl>
         </div>
       </section>
@@ -89,7 +87,7 @@ export default function Home() {
       {/* ------------------------------------------------------------ Jeux */}
       <section>
         <SectionHeader eyebrow="Salon de jeu" title="Les jeux" href="/salon" linkLabel="Voir le salon" />
-        <div className="no-scrollbar -mx-4 flex snap-x snap-mandatory scroll-px-4 gap-3 overflow-x-auto px-4 pb-2 lg:mx-0 lg:grid lg:grid-cols-3 lg:gap-4 lg:overflow-visible lg:px-0 xl:grid-cols-6">
+        <div className="no-scrollbar -mx-4 flex snap-x snap-mandatory scroll-px-4 gap-3 overflow-x-auto px-4 pb-2 lg:mx-0 lg:grid lg:grid-cols-4 lg:gap-4 lg:overflow-visible lg:px-0">
           {GAME_LIST.map((g, i) => (
             <Link
               key={g.id}
@@ -125,9 +123,6 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ------------------------------------------------------------ Paris sportifs */}
-      <FeaturedMatches />
-
       {/* ------------------------------------------------------------ Comment ça marche */}
       <section>
         <SectionHeader eyebrow="Simple et transparent" title="Comment ça marche" />
@@ -136,13 +131,13 @@ export default function Home() {
             Recevez <strong className="text-white">{SIGNUP_BONUS_CORIS} Coris</strong> offerts dès la création de votre compte.
           </Step>
           <Step n={2} emoji="🎮" title="Jouez en Coris" tone="amber">
-            {STAKE_CORIS} Coris par partie, {STAKE_CORIS_RUN} pour Endless Run et Course auto, contre l&apos;ordinateur ou entre joueurs.
+            {STAKE_CORIS} Coris par partie, contre l&apos;ordinateur ou entre joueurs.
           </Step>
           <Step n={3} emoji="🦁" title="Passez Pro" tone="fuchsia">
             Convertissez vos gains : {CORIS_PER_LION} Coris = 1 Lion. Partie Pro : {PRO_STAKE_LIONS} Lion.
           </Step>
-          <Step n={4} emoji="⚽" title="Pariez en F CFA" tone="emerald">
-            1 Lion = {FCFA_PER_LION.toLocaleString("fr-FR")} F CFA, ou déposez par Mobile Money pour parier.
+          <Step n={4} emoji="💳" title="Retirez en F CFA" tone="emerald">
+            1 Lion = {FCFA_PER_LION.toLocaleString("fr-FR")} F CFA, ou déposez par Mobile Money pour acheter des Lions.
           </Step>
         </ol>
 
@@ -166,7 +161,6 @@ export default function Home() {
               <div className="flex w-1/5 items-center justify-center bg-white/10 text-slate-200">20 %</div>
             </div>
             <div className="mt-1.5 flex justify-end text-[11px] text-slate-500">Maison</div>
-            <p className="mt-3 text-xs text-slate-400">⚽ Paris sportifs : <strong className="text-emerald-300">90 %</strong> du pot aux gagnants, 10 % pour la maison.</p>
           </div>
         </div>
       </section>

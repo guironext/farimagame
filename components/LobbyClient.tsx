@@ -381,7 +381,7 @@ export function SalonGamePicker({ game, onPick }: { game: GameId; onPick: (id: G
       <h2 id="salon-le-jeu" className="mb-3 text-[11px] font-bold uppercase tracking-[0.16em] text-slate-400">
         Le jeu
       </h2>
-      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
+      <div className="grid grid-cols-2 gap-2.5">
         {GAME_LIST.map((g) => {
           const selected = game === g.id;
           return (

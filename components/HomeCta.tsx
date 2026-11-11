@@ -62,8 +62,8 @@ export function HomeCta({ variant = "hero" }: { variant?: "hero" | "banner" }) {
           <Link href="/salon" className={primary}>
             🎮 Jouer
           </Link>
-          <Link href="/paris" className={ghost}>
-            ⚽ Parier
+          <Link href="/portefeuille" className={ghost}>
+            💳 Portefeuille
           </Link>
         </div>
         <Link href="/tableau-de-bord" className="inline-flex min-h-11 items-center text-sm font-medium text-slate-400 hover:text-white">
@@ -78,14 +78,9 @@ export function HomeCta({ variant = "hero" }: { variant?: "hero" | "banner" }) {
       <Link href="/inscription" className={cx(primary, "w-full")}>
         🎁 S&apos;inscrire · {bonus} Coris offerts
       </Link>
-      <div className="grid grid-cols-2 gap-2.5">
-        <Link href="/salon" className={ghost}>
-          🎮 Jouer
-        </Link>
-        <Link href="/paris" className={ghost}>
-          ⚽ Parier
-        </Link>
-      </div>
+      <Link href="/salon" className={cx(ghost, "w-full")}>
+        🎮 Voir les jeux
+      </Link>
       <p className="pt-1 text-sm text-slate-400">
         Déjà inscrit ?{" "}
         <Link href="/connexion" className="font-semibold text-amber-300 hover:text-amber-200">

@@ -8,7 +8,6 @@ import { Suspense, useEffect, useRef, useState, useSyncExternalStore } from "rea
 import { CLERK_ENABLED } from "@/lib/clerk";
 import { useSession } from "./SessionProvider";
 import {
-  IconBall,
   IconChart,
   IconChevronDown,
   IconCrown,
@@ -16,14 +15,13 @@ import {
   IconHome,
   IconLogout,
   IconShield,
-  IconTicket,
   IconUser,
   IconWallet,
 } from "./icons";
 import { canManageMoney } from "@/lib/types";
 import { Money, cx } from "./ui";
 
-/** Lien actif : correspondance exacte pour "/", sinon préfixe (sans que /paris active /paris/mes-paris). */
+/** Lien actif : correspondance exacte pour "/", sinon préfixe. */
 function isActive(pathname: string | null, href: string, exact?: boolean) {
   if (!pathname) return false;
   if (href === "/" || exact) return pathname === href;
@@ -43,8 +41,6 @@ function useHydratedSession() {
 
 const DESKTOP_LINKS = [
   { href: "/salon", label: "Jeux" },
-  { href: "/paris", label: "Paris sportifs" },
-  { href: "/paris/mes-paris", label: "Mes paris", auth: true },
   { href: "/portefeuille", label: "Portefeuille", auth: true },
   { href: "/passer-pro", label: "Passez Pro", auth: true },
 ];
@@ -87,7 +83,7 @@ function DesktopNav({ pathname }: { pathname: string | null }) {
   return (
     <nav className="hidden items-center gap-1 xl:flex" aria-label="Navigation principale">
       {links.map((l) => {
-        const active = l.href === "/paris" ? isActive(pathname, "/paris") && !isActive(pathname, "/paris/mes-paris") : isActive(pathname, l.href);
+        const active = isActive(pathname, l.href);
         return (
           <Link
             key={l.href}
@@ -170,15 +166,9 @@ function AccountArea() {
   const menu = [
     { href: "/tableau-de-bord", label: "Tableau de bord", icon: IconChart },
     { href: "/portefeuille", label: "Portefeuille", icon: IconWallet },
-    { href: "/paris/mes-paris", label: "Mes paris", icon: IconTicket },
     { href: "/passer-pro", label: me.level === "pro" ? "Niveau Pro (actif)" : "Passez Pro", icon: IconCrown },
     ...(isAdmin ? [{ href: "/admin", label: "Comptes", icon: IconShield }] : []),
-    ...(canManageMoney(me.role)
-      ? [
-          { href: "/admin/paris", label: isHome ? "Argent des paris" : "Admin paris", icon: IconShield },
-          { href: "/maison", label: "La Maison", icon: IconShield },
-        ]
-      : []),
+    ...(canManageMoney(me.role) ? [{ href: "/maison", label: "La Maison", icon: IconShield }] : []),
   ];
 
   return (
@@ -322,14 +312,6 @@ function BottomTabBar({ pathname }: { pathname: string | null }) {
   const tabs = [
     { href: "/", label: "Accueil", icon: IconHome, active: isActive(pathname, "/") },
     { href: "/salon", label: "Jeux", icon: IconGamepad, active: isActive(pathname, "/salon") || isActive(pathname, "/jeu") },
-    {
-      href: "/paris",
-      label: "Paris",
-      icon: IconBall,
-      active: isActive(pathname, "/paris") && !isActive(pathname, "/paris/mes-paris"),
-      featured: true,
-    },
-    { href: "/paris/mes-paris", label: "Mes paris", icon: IconTicket, active: isActive(pathname, "/paris/mes-paris") },
     me
       ? {
           href: "/portefeuille",
@@ -342,7 +324,7 @@ function BottomTabBar({ pathname }: { pathname: string | null }) {
 
   return (
     <nav aria-label="Navigation mobile" className="glass pb-safe fixed inset-x-0 bottom-0 z-40 border-t border-line xl:hidden">
-      <ul className="mx-auto grid h-[var(--tabbar-h)] max-w-lg grid-cols-5">
+      <ul className="mx-auto grid h-[var(--tabbar-h)] max-w-lg grid-cols-3">
         {tabs.map((t) => (
           <li key={t.href}>
             <Link
@@ -357,7 +339,7 @@ function BottomTabBar({ pathname }: { pathname: string | null }) {
               <span
                 className={cx(
                   "flex h-8 w-12 items-center justify-center rounded-full transition",
-                  t.active && (t.featured ? "bg-brand-gradient text-slate-950 shadow-glow-sm" : "bg-white/10 text-amber-300"),
+                  t.active && "bg-white/10 text-amber-300",
                 )}
               >
                 <t.icon className="h-[22px] w-[22px]" />

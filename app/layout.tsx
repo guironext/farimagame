@@ -22,8 +22,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "FarimaGame – Ludo, Dames, Awalé, Échecs, Endless Run, Course auto & paris sportifs",
-  description: "Plateforme de jeux : Ludo, Jeu de Dames, Awalé, Échecs, Endless Run et Course auto. Jouez en Coris, passez Pro, jouez en Lions et pariez sur le football en F CFA.",
+  title: "FarimaGame – Ludo, Dames, Awalé, Échecs",
+  description: "Plateforme de jeux : Ludo, Jeu de Dames, Awalé et Échecs. Jouez en Coris, passez Pro et jouez en Lions.",
 };
 
 export const viewport: Viewport = {

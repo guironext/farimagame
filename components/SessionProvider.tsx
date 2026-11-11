@@ -17,10 +17,6 @@ export interface AppConfig {
   DEPOSIT_MAX_FCFA: number;
   WITHDRAW_MIN_FCFA: number;
   WITHDRAW_MAX_FCFA: number;
-  BET_MIN_FCFA: number;
-  BET_MAX_FCFA: number;
-  BET_WINNERS_SHARE: number;
-  BET_HOUSE_SHARE: number;
 }
 
 interface Session {

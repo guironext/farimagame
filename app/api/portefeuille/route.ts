@@ -24,7 +24,6 @@ export async function GET() {
         currency: t.currency,
         amount: fromUnits(t.amount),
         balanceAfter: fromUnits(t.balanceAfter),
-        matchId: t.matchId,
         createdAt: t.createdAt,
       }));
     const p = getPaymentProvider();

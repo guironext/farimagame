@@ -1,6 +1,6 @@
 // Fournisseur SIMULÉ (mode démo) : aucun argent réel ne circule.
 // Les dépôts sont confirmés immédiatement. Les retraits sont acceptés par le "fournisseur" mais restent
-// "en attente" jusqu'à validation par un administrateur (page /admin/paris), comme chez un vrai opérateur
+// "en attente" jusqu'à validation par la Maison (page /maison), comme chez un vrai opérateur
 // où l'envoi est déclenché après contrôle.
 // Pour tester un échec : un numéro se terminant par 0000 est refusé.
 import type { PaymentProvider, PaymentRequest, PaymentResult } from "./types";

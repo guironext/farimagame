@@ -320,7 +320,7 @@ export async function tableAction(userId: string, tableId: string, body: Record<
       checkOver(db, t);
       runCpu(db, t);
     } else if (action === "cpu") {
-      if (t.game !== "ludo" && t.game !== "dames" && t.game !== "awale" && t.game !== "echecs" && t.game !== "run" && t.game !== "course") throw new AppError(400, "Action inconnue.");
+      if (t.game !== "ludo" && t.game !== "dames" && t.game !== "awale" && t.game !== "echecs") throw new AppError(400, "Action inconnue.");
       const cur = engine.current(t.state);
       if (cur == null || !t.seats[cur]?.isCpu) return;
       const move = engine.ai(t.state, cur);
@@ -344,6 +344,7 @@ export async function tableAction(userId: string, tableId: string, body: Record<
 
 export function viewTable(t: TableRow, userId: string | null): TableView {
   const engine = ENGINES[t.game];
+  if (!engine) throw new AppError(404, "Ce jeu n'est plus disponible.");
   const mySeat = userId ? (t.seats.find((s) => s.userId === userId)?.seat ?? null) : null;
   return {
     id: t.id,
@@ -412,20 +413,21 @@ function lightView(t: TableRow, userId: string) {
 export async function listTables(userId: string) {
   const db = await readDb();
   const isPro = getUser(db, userId).level === "pro";
+  const playable = (t: TableRow) => t.game in ENGINES;
   const open = db.tables
-    .filter((t) => t.status === "waiting" && t.currency !== "lions" && (t.invites ?? []).length === 0 && !t.seats.some((s) => s.userId === userId))
+    .filter((t) => playable(t) && t.status === "waiting" && t.currency !== "lions" && (t.invites ?? []).length === 0 && !t.seats.some((s) => s.userId === userId))
     .slice(-50)
     .reverse()
     .map((t) => viewTable(t, userId));
   const defis = isPro
     ? db.tables
-        .filter((t) => t.status === "waiting" && t.currency === "lions" && t.mode !== "cpu" && (t.invites ?? []).length === 0)
+        .filter((t) => playable(t) && t.status === "waiting" && t.currency === "lions" && t.mode !== "cpu" && (t.invites ?? []).length === 0)
         .slice(-30)
         .reverse()
         .map((t) => lightView(t, userId))
     : [];
   const invites = db.tables
-    .filter((t) => t.status === "waiting" && (t.invites ?? []).some((i) => i.userId === userId && i.status === "pending"))
+    .filter((t) => playable(t) && t.status === "waiting" && (t.invites ?? []).some((i) => i.userId === userId && i.status === "pending"))
     .slice(-20)
     .reverse()
     .map((t) => {
@@ -434,7 +436,7 @@ export async function listTables(userId: string) {
       return v;
     });
   const mine = db.tables
-    .filter((t) => t.seats.some((s) => s.userId === userId) && t.status !== "cancelled")
+    .filter((t) => playable(t) && t.seats.some((s) => s.userId === userId) && t.status !== "cancelled")
     .slice(-30)
     .reverse()
     .map((t) => lightView(t, userId));

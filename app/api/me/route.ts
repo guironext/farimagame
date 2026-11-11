@@ -2,10 +2,6 @@ import { connection } from "next/server";
 import { currentUser, publicUser } from "@/lib/server/auth";
 import { jsonError } from "@/lib/server/errors";
 import {
-  BET_HOUSE_SHARE,
-  BET_MAX_FCFA,
-  BET_MIN_FCFA,
-  BET_WINNERS_SHARE,
   CORIS_PER_LION,
   DEPOSIT_MAX_FCFA,
   DEPOSIT_MIN_FCFA,
@@ -35,10 +31,6 @@ export async function GET() {
         DEPOSIT_MAX_FCFA,
         WITHDRAW_MIN_FCFA,
         WITHDRAW_MAX_FCFA,
-        BET_MIN_FCFA,
-        BET_MAX_FCFA,
-        BET_WINNERS_SHARE,
-        BET_HOUSE_SHARE,
       },
     });
   } catch (e) {

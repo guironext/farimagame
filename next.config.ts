@@ -3,8 +3,8 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   /* config options here */
   serverExternalPackages: ["@prisma/client", "@prisma/adapter-neon"],
-  // Dossier de compilation séparé pour le serveur de test lancé par scripts/test-paris.mjs (FARIMA_NEXT_DIST_DIR=.next-test),
-  // afin qu'il tourne à côté de votre `npm run dev` sans le perturber.
+  // Dossier de compilation séparé pour un serveur de test (FARIMA_NEXT_DIST_DIR=.next-test),
+  // afin qu'il tourne à côté de `npm run dev` sans le perturber.
   distDir: process.env.FARIMA_NEXT_DIST_DIR || ".next",
   experimental: {
     agentFeedback: true,

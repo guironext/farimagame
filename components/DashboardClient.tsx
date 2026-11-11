@@ -73,7 +73,6 @@ export function DashboardClient() {
 
       <div className="flex flex-wrap gap-3">
         <ButtonLink href="/salon">🎮 Jouer maintenant</ButtonLink>
-        <ButtonLink href="/paris" variant="ghost">⚽ Paris sportifs</ButtonLink>
         <ButtonLink href="/passer-pro" variant="pro">🦁 Niveau Pro & conversion</ButtonLink>
       </div>
 
@@ -86,7 +85,7 @@ export function DashboardClient() {
               return (
                 <Link key={t.id} href={`/jeu/${t.id}`} className="flex items-center justify-between gap-2 py-2 hover:text-amber-200">
                   <span>
-                    {GAMES[t.game].emoji} {GAMES[t.game].name} · <span className="text-slate-400">{modeLabel(t.mode)}</span>
+                    {GAMES[t.game] ? `${GAMES[t.game].emoji} ${GAMES[t.game].name}` : "Partie"} · <span className="text-slate-400">{modeLabel(t.mode)}</span>
                   </span>
                   <span className={cx("text-xs", t.status === "finished" ? (won ? "text-emerald-300" : t.isDraw ? "text-sky-300" : "text-rose-300") : "text-amber-300")}>
                     {t.status === "finished" ? (won ? "Gagnée" : t.isDraw ? "Nul" : "Perdue") : t.status === "playing" ? "En cours" : "En attente"}
@@ -120,8 +119,6 @@ export function DashboardClient() {
                     <td>
                       {t.tableId ? (
                         <Link href={`/jeu/${t.tableId}`} className="hover:text-amber-200">{t.label}</Link>
-                      ) : t.matchId ? (
-                        <Link href={`/paris/match/${encodeURIComponent(t.matchId)}`} className="hover:text-amber-200">{t.label}</Link>
                       ) : (
                         t.label
                       )}

@@ -1,4 +1,4 @@
-import { STAKE_CORIS, STAKE_CORIS_RUN } from "../config";
+import { STAKE_CORIS } from "../config";
 import type { GameId, Mode } from "../types";
 
 export interface GameMeta {
@@ -56,27 +56,6 @@ export const GAMES: Record<GameId, GameMeta> = {
       "Le roi des jeux de stratégie : mettez le roi adverse échec et mat.",
     color: "from-sky-600 to-indigo-500",
     stakeCoris: STAKE_CORIS,
-  },
-  run: {
-    id: "run",
-    name: "Endless Run",
-    short: "Run",
-    emoji: "🏃",
-    modes: ["cpu", "2"],
-    description:
-      "Courez sans fin sur trois voies. Sautez, glissez, changez de voie. Le plus loin gagne.",
-    color: "from-cyan-500 to-fuchsia-500",
-    stakeCoris: STAKE_CORIS_RUN,
-  },
-  course: {
-    id: "course",
-    name: "Course auto",
-    short: "Course",
-    emoji: "🏎️",
-    modes: ["cpu", "2"],
-    description: "Deux voitures, trois voies. Accélérez, freinez, évitez les barrières. Le premier à la ligne gagne.",
-    color: "from-red-600 to-amber-400",
-    stakeCoris: STAKE_CORIS_RUN,
   },
 };
 
