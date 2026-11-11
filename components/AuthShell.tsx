@@ -1,10 +1,10 @@
 // Mise en page des écrans de connexion / inscription (le formulaire lui-même est fourni par Clerk).
 import Link from "next/link";
-import { SIGNUP_BONUS_CORIS, STAKE_CORIS } from "@/lib/config";
+import { SIGNUP_BONUS_CORIS, STAKE_CORIS, STAKE_CORIS_RUN } from "@/lib/config";
 
 const PERKS = [
   { icon: "🎁", title: `${SIGNUP_BONUS_CORIS} Coris offerts`, text: "crédités automatiquement à la création du compte" },
-  { icon: "🎲", title: "Ludo, Dames, Awalé, Échecs", text: `contre l'ordinateur ou entre amis, ${STAKE_CORIS} Coris la partie` },
+  { icon: "🎲", title: "Ludo, Dames, Awalé, Échecs, Run, Course", text: `contre l'ordinateur ou entre amis, ${STAKE_CORIS} Coris la partie, ${STAKE_CORIS_RUN} pour Endless Run et Course auto` },
   { icon: "⚽", title: "Paris sportifs", text: "ligues européennes, Ligue des champions, matchs africains" },
   { icon: "🔒", title: "Compte sécurisé", text: "connexion protégée par Clerk (e-mail, mot de passe, Google…)" },
 ];

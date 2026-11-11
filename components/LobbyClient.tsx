@@ -29,6 +29,11 @@ export function LobbyClient() {
     if (g && GAMES[g]) setGame(g);
   }, []);
 
+  useEffect(() => {
+    if (loading || !me) return;
+    document.getElementById(`salon-jeu-${game}`)?.scrollIntoView({ inline: "center", block: "nearest" });
+  }, [game, loading, me]);
+
   const load = useCallback(async () => {
     try {
       setLists(await api("/api/tables"));
@@ -57,7 +62,7 @@ export function LobbyClient() {
     if (allowed === "cpu") return;
     const tableCurrency = me.level === "pro" && currency === "lions" ? "lions" : "coris";
     let cancel = false;
-    api<{ players: { id: string; username: string; level: string }[] }>(`/api/joueurs?currency=${tableCurrency}`)
+    api<{ players: { id: string; username: string; level: string }[] }>(`/api/joueurs?currency=${tableCurrency}&game=${game}`)
       .then((r) => {
         if (!cancel) setRoster(r.players);
       })
@@ -75,7 +80,7 @@ export function LobbyClient() {
   const effectiveMode = meta.modes.includes(mode) ? mode : "cpu";
   const isPro = me.level === "pro";
   const cur: Currency = isPro ? currency : "coris";
-  const stake = cur === "coris" ? config.STAKE_CORIS : config.PRO_STAKE_LIONS;
+  const stake = cur === "coris" ? meta.stakeCoris : config.PRO_STAKE_LIONS;
   const players = modePlayers(effectiveMode);
   const inviteCount = effectiveMode === "cpu" ? 0 : players - 1;
   const pot = stake * players;
@@ -141,12 +146,37 @@ export function LobbyClient() {
   }
 
   const active = lists?.mine.filter((t) => t.status === "playing" || t.status === "waiting") ?? [];
+  const canLaunch = !busy && balance >= stake && (launchingDefi || picked.length === inviteCount);
+  const launchLabel = effectiveMode === "cpu" ? "Jouer" : launchingDefi ? "Lancer un défi" : "Inviter";
 
   return (
-    <div className="space-y-8">
-      <PageTitle title="Salon de jeu" subtitle="Choisissez un jeu, un mode et lancez une partie." />
+    <div className="space-y-5 pb-[calc(var(--tabbar-h)+var(--safe-bottom)+6.75rem)] xl:space-y-8 xl:pb-0">
+      <SalonHeading />
 
-      {!isPro && <SalonProCta />}
+      {active.length > 0 && (
+        <section>
+          <h2 className="mb-2 text-[11px] font-bold uppercase tracking-[0.16em] text-amber-200">Parties en cours</h2>
+          <div className="no-scrollbar -mx-4 flex snap-x gap-2 overflow-x-auto px-4 pb-1">
+            {active.map((t) => (
+              <Link
+                key={t.id}
+                href={`/jeu/${t.id}`}
+                className="flex min-h-14 w-[78%] shrink-0 snap-start items-center gap-3 rounded-2xl border border-amber-300/30 bg-amber-400/10 px-3 py-2.5 sm:w-auto"
+              >
+                <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br ${GAMES[t.game].color} text-xl`}>
+                  {GAMES[t.game].emoji}
+                </span>
+                <span className="min-w-0">
+                  <span className="block truncate text-sm font-bold">{GAMES[t.game].name}</span>
+                  <span className={cx("block text-xs", t.status === "playing" ? "text-emerald-300" : "text-amber-200")}>
+                    {t.status === "playing" ? (t.currentSeat === t.mySeat ? "À vous de jouer" : "En cours") : `En attente ${t.seats.length}/${t.maxPlayers}`}
+                  </span>
+                </span>
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
 
       <InvitesAndChallenges
         invitations={invitations}
@@ -158,89 +188,52 @@ export function LobbyClient() {
         onJoin={join}
       />
 
-      {active.length > 0 && (
-        <Card className="border-amber-400/30">
-          <h2 className="mb-3 font-semibold">Vos parties en cours</h2>
-          <div className="flex flex-wrap gap-2">
-            {active.map((t) => (
-              <Link key={t.id} href={`/jeu/${t.id}`} className="rounded-xl bg-white/5 px-3 py-2 text-sm hover:bg-white/10">
-                {GAMES[t.game].emoji} {GAMES[t.game].short} · {modeLabel(t.mode)} ·{" "}
-                <span className={t.status === "playing" ? "text-emerald-300" : "text-amber-300"}>
-                  {t.status === "playing" ? (t.currentSeat === t.mySeat ? "à vous de jouer" : "en cours") : `en attente ${t.seats.length}/${t.maxPlayers}`}
-                </span>
-              </Link>
-            ))}
-          </div>
-        </Card>
-      )}
+      <SalonGamePicker game={game} onPick={setGame} />
 
-      <section>
-        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-400">1. Le jeu</h2>
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-          {GAME_LIST.map((g) => (
+      <section className="rounded-[1.35rem] border border-white/10 bg-white/[0.03] p-3 sm:p-4">
+        <h2 className="mb-2 text-[11px] font-bold uppercase tracking-[0.16em] text-slate-400">Mode</h2>
+        <div className="no-scrollbar -mx-1 flex gap-2 overflow-x-auto px-1">
+          {meta.modes.map((m) => (
             <button
-              key={g.id}
-              onClick={() => setGame(g.id)}
+              key={m}
+              type="button"
+              onClick={() => setMode(m)}
               className={cx(
-                "rounded-2xl border p-4 text-left transition",
-                game === g.id ? "border-amber-400 bg-amber-400/10" : "border-white/10 bg-white/[0.03] hover:border-white/25",
+                "min-h-11 shrink-0 rounded-full border px-4 text-sm font-semibold transition",
+                effectiveMode === m ? "border-amber-300 bg-amber-400/15 text-amber-100" : "border-white/10 bg-black/20 text-slate-300",
               )}
             >
-              <div className={`mb-2 flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br ${g.color} text-2xl`}>{g.emoji}</div>
-              <div className="font-bold">{g.name}</div>
-              <div className="text-xs text-slate-400">{g.modes.length === 4 ? "Ordinateur, 2, 3 ou 4 joueurs" : "Ordinateur ou 2 joueurs"}</div>
+              {m === "cpu" ? "Ordinateur" : `${m} joueurs`}
             </button>
           ))}
         </div>
+        <h2 className="mb-2 mt-4 text-[11px] font-bold uppercase tracking-[0.16em] text-slate-400">Monnaie</h2>
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            onClick={() => setCurrency("coris")}
+            className={cx("min-h-12 rounded-xl border px-3 text-sm font-semibold", cur === "coris" ? "border-amber-300 bg-amber-400/15 text-amber-100" : "border-white/10 bg-black/20")}
+          >
+            🐚 Coris
+          </button>
+          <button
+            type="button"
+            onClick={() => isPro && setCurrency("lions")}
+            disabled={!isPro}
+            className={cx(
+              "min-h-12 rounded-xl border px-3 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-45",
+              cur === "lions" ? "border-fuchsia-300 bg-fuchsia-400/15 text-fuchsia-100" : "border-white/10 bg-black/20",
+            )}
+          >
+            🦁 Lions
+          </button>
+        </div>
+        {!isPro && (
+          <p className="mt-2 text-xs text-slate-500">
+            Les Lions sont réservés aux joueurs Pro. <Link href="/passer-pro" className="font-semibold text-fuchsia-300">Passez Pro</Link>
+          </p>
+        )}
       </section>
-
-      <div className="grid gap-6 md:grid-cols-2">
-        <section>
-          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-400">2. Le mode</h2>
-          <div className="grid grid-cols-2 gap-2">
-            {meta.modes.map((m) => (
-              <button
-                key={m}
-                onClick={() => setMode(m)}
-                className={cx(
-                  "rounded-xl border px-3 py-3 text-sm font-semibold transition",
-                  effectiveMode === m ? "border-amber-400 bg-amber-400/10 text-amber-200" : "border-white/10 bg-white/[0.03] hover:border-white/25",
-                )}
-              >
-                {m === "cpu" ? "🤖 " : "👥 "}
-                {modeLabel(m)}
-              </button>
-            ))}
-          </div>
-        </section>
-        <section>
-          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-400">3. La monnaie</h2>
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              onClick={() => setCurrency("coris")}
-              className={cx("rounded-xl border px-3 py-3 text-sm font-semibold", cur === "coris" ? "border-amber-400 bg-amber-400/10 text-amber-200" : "border-white/10 bg-white/[0.03]")}
-            >
-              🐚 Coris (normal)
-            </button>
-            <button
-              onClick={() => isPro && setCurrency("lions")}
-              disabled={!isPro}
-              title={isPro ? "" : "Réservé aux joueurs Pro"}
-              className={cx(
-                "rounded-xl border px-3 py-3 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50",
-                cur === "lions" ? "border-fuchsia-400 bg-fuchsia-400/10 text-fuchsia-200" : "border-white/10 bg-white/[0.03]",
-              )}
-            >
-              🦁 Lions (Pro)
-            </button>
-          </div>
-          {!isPro && (
-            <p className="mt-2 text-xs text-slate-500">
-              Les parties en Lions sont réservées aux joueurs Pro. <Link href="/pro" className="text-fuchsia-300">Passer Pro →</Link>
-            </p>
-          )}
-        </section>
-      </div>
 
       {launchingDefi && (
         <Card className="border-fuchsia-400/30">
@@ -253,8 +246,8 @@ export function LobbyClient() {
 
       {inviteCount > 0 && !launchingDefi && (
         <section>
-          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-400">
-            4. Inviter {inviteCount} joueur{inviteCount > 1 ? "s" : ""}
+          <h2 className="mb-2 text-[11px] font-bold uppercase tracking-[0.16em] text-slate-400">
+            Inviter {inviteCount} joueur{inviteCount > 1 ? "s" : ""}
           </h2>
           <Card>
             <p className="mb-3 text-sm text-slate-300">
@@ -313,7 +306,7 @@ export function LobbyClient() {
         </section>
       )}
 
-      <Card className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
+      <Card className="hidden items-center justify-between gap-4 xl:flex">
         <div className="space-y-1 text-sm">
           <div>
             Mise : <Money amount={stake} currency={cur} /> · Pot ({players} mises{effectiveMode === "cpu" ? ", l'ordinateur mise aussi" : ""}) :{" "}
@@ -326,47 +319,119 @@ export function LobbyClient() {
             Votre solde : {fmtAmount(balance)} {cur === "coris" ? "Coris" : "Lions"}
           </div>
         </div>
-        <Button onClick={create} disabled={busy || balance < stake || (!launchingDefi && picked.length !== inviteCount)} className="w-full px-6 py-3 sm:w-auto">
+        <Button onClick={create} disabled={!canLaunch} className="px-6 py-3">
           {effectiveMode === "cpu" ? "Jouer contre l'ordinateur" : launchingDefi ? "Lancer un défi" : "Envoyer les invitations"}
         </Button>
       </Card>
       {balance < stake && <Alert kind="info">Solde insuffisant pour cette mise.</Alert>}
       {error && <Alert>{error}</Alert>}
 
+      <div className="bottom-above-tabbar fixed inset-x-0 z-30 px-3 xl:hidden">
+        <div className="mx-auto flex max-w-lg items-center gap-3 rounded-2xl border border-white/10 bg-[#07111f]/95 p-2.5 shadow-2xl shadow-black/50 backdrop-blur">
+          <div className="min-w-0 flex-1 pl-1">
+            <p className="truncate text-sm font-bold">{meta.name}</p>
+            <p className="truncate text-xs text-slate-400">
+              <Money amount={stake} currency={cur} /> · gain <Money amount={prize} currency={cur} className="text-emerald-300" />
+            </p>
+          </div>
+          <Button onClick={create} disabled={!canLaunch} className="h-11 shrink-0 rounded-xl px-4">
+            {launchLabel}
+          </Button>
+        </div>
+      </div>
+
       <section>
-        <h2 className="mb-3 text-lg font-bold">Tables ouvertes</h2>
+        <h2 className="mb-2 text-[11px] font-bold uppercase tracking-[0.16em] text-slate-400">Tables ouvertes</h2>
         {!lists ? (
           <Spinner />
         ) : lists.open.length === 0 ? (
           <p className="text-sm text-slate-400">Aucune table en attente pour le moment. Créez-en une !</p>
         ) : (
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
             {lists.open.map((t) => {
               const locked = t.currency === "lions" && !isPro;
               return (
-                <Card key={t.id} className="flex flex-col gap-3 p-4">
-                  <div className="flex items-center justify-between">
-                    <span className="font-semibold">
-                      {GAMES[t.game].emoji} {GAMES[t.game].name}
-                    </span>
-                    <span className="text-xs text-slate-400">{modeLabel(t.mode)}</span>
+                <li key={t.id} className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.04] p-3">
+                  <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br ${GAMES[t.game].color} text-xl`}>
+                    {GAMES[t.game].emoji}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-bold">{GAMES[t.game].name}</p>
+                    <p className="truncate text-xs text-slate-400">
+                      {modeLabel(t.mode)} · {t.seats.length}/{t.maxPlayers} · <Money amount={t.stake} currency={t.currency} />
+                    </p>
                   </div>
-                  <div className="text-sm text-slate-300">
-                    {t.seats.map((s) => s.username).join(", ")} · {t.seats.length}/{t.maxPlayers}
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <Money amount={t.stake} currency={t.currency} />
-                    <Button variant={t.currency === "lions" ? "pro" : "primary"} disabled={busy || locked} onClick={() => join(t.id)}>
-                      {locked ? "Pro uniquement" : "Rejoindre"}
-                    </Button>
-                  </div>
-                </Card>
+                  <Button variant={t.currency === "lions" ? "pro" : "primary"} disabled={busy || locked} onClick={() => join(t.id)} className="h-10 shrink-0 px-3">
+                    {locked ? "Pro" : "Rejoindre"}
+                  </Button>
+                </li>
               );
             })}
-          </div>
+          </ul>
         )}
       </section>
     </div>
+  );
+}
+
+export function SalonGamePicker({ game, onPick }: { game: GameId; onPick: (id: GameId) => void }) {
+  const meta = GAMES[game];
+  return (
+    <section aria-labelledby="salon-le-jeu">
+      <h2 id="salon-le-jeu" className="mb-3 text-[11px] font-bold uppercase tracking-[0.16em] text-slate-400">
+        Le jeu
+      </h2>
+      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
+        {GAME_LIST.map((g) => {
+          const selected = game === g.id;
+          return (
+            <button
+              key={g.id}
+              id={`salon-jeu-${g.id}`}
+              type="button"
+              aria-pressed={selected}
+              onClick={() => onPick(g.id)}
+              className={cx(
+                "relative overflow-hidden rounded-[1.35rem] text-left outline-none transition duration-200",
+                "focus-visible:ring-2 focus-visible:ring-white",
+                selected ? "z-[1] ring-2 ring-amber-200 shadow-glow-sm" : "ring-1 ring-white/10 active:scale-[0.98]",
+              )}
+            >
+              <span className={`relative flex h-[8.75rem] flex-col justify-between overflow-hidden bg-gradient-to-br p-3.5 sm:h-[9.5rem] ${g.color}`}>
+                <span aria-hidden className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_16%_12%,rgba(255,255,255,0.42),transparent_40%),radial-gradient(circle_at_100%_120%,rgba(0,0,0,0.4),transparent_48%)]" />
+                <span aria-hidden className="pointer-events-none absolute -right-5 -top-6 h-20 w-20 rounded-full border-[10px] border-white/15" />
+                <span aria-hidden className={cx("pointer-events-none absolute inset-0 bg-[#050b1a]/20 transition duration-200", selected && "bg-transparent")} />
+                <span className="relative flex items-start justify-between gap-2">
+                  <span className="text-[2.05rem] leading-none drop-shadow-[0_8px_12px_rgba(0,0,0,0.35)] sm:text-4xl">{g.emoji}</span>
+                  <span
+                    aria-hidden
+                    className={cx(
+                      "grid h-6 w-6 shrink-0 place-items-center rounded-full text-[13px] font-black",
+                      selected ? "bg-white text-slate-950" : "border border-white/50 bg-black/25 text-transparent",
+                    )}
+                  >
+                    ✓
+                  </span>
+                </span>
+                <span className="relative">
+                  <span className="block text-[15px] font-black leading-tight tracking-tight text-white sm:text-base">{g.name}</span>
+                  <span className="mt-1.5 inline-flex rounded-full bg-black/35 px-2 py-0.5 text-[11px] font-semibold text-white/95 backdrop-blur-sm">
+                    {g.stakeCoris} Coris
+                  </span>
+                </span>
+              </span>
+            </button>
+          );
+        })}
+      </div>
+      <div className="mt-3 flex items-start gap-3 rounded-2xl border border-white/10 bg-white/[0.04] px-3.5 py-3">
+        <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br text-xl ${meta.color}`}>{meta.emoji}</span>
+        <p className="min-w-0 pt-0.5 text-sm leading-relaxed text-slate-300">
+          <span className="font-bold text-white">{meta.name}. </span>
+          {meta.description}
+        </p>
+      </div>
+    </section>
   );
 }
 
@@ -393,6 +458,7 @@ export function InvitesAndChallenges({
   onJoin: (id: string) => void;
 }) {
   const total = invitations.length + defis.length;
+  if (total === 0) return null;
   return (
     <section aria-labelledby="invitations-defis" className="space-y-3">
       <div className="flex items-end justify-between gap-3">
@@ -494,29 +560,29 @@ export function InvitesAndChallenges({
   );
 }
 
+export function SalonHeading() {
+  return (
+    <div className="flex items-start justify-between gap-3">
+      <PageTitle className="mb-0 min-w-0 flex-1" title="Salon de jeu" subtitle="Choisissez un jeu et lancez la partie." />
+      <ButtonLink href="/passer-pro" variant="pro" className="h-10 shrink-0 rounded-xl px-3.5 py-0 text-sm shadow-lg shadow-fuchsia-900/30">
+        Passez Pro
+      </ButtonLink>
+    </div>
+  );
+}
+
 /** Bandeau du salon : passage gratuit au niveau Pro, puis jeu en Lions. */
 export function SalonProCta() {
   return (
-    <section className="relative overflow-hidden rounded-[1.75rem] border border-fuchsia-400/35 bg-gradient-to-br from-violet-600/30 via-fuchsia-600/15 to-amber-500/10 p-5 shadow-xl shadow-fuchsia-950/20 sm:p-6">
-      <div aria-hidden className="pointer-events-none absolute -right-10 -top-16 h-44 w-44 rounded-full bg-fuchsia-400/25 blur-3xl" />
-      <div aria-hidden className="pointer-events-none absolute -bottom-16 left-6 h-32 w-32 rounded-full bg-amber-400/20 blur-3xl" />
-      <div className="relative flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
-        <div className="min-w-0">
-          <p className="text-xs font-bold uppercase tracking-[0.18em] text-fuchsia-200">Niveau Pro</p>
-          <h2 className="mt-1 text-xl font-extrabold tracking-tight sm:text-2xl">Jouez en Lions</h2>
-          <p className="mt-1 max-w-xl text-sm text-slate-300">
-            Passez Pro gratuitement, convertissez vos Coris et misez en Lions. Le vainqueur empoche toujours 80&nbsp;%.
-          </p>
-          <ul className="mt-3 flex flex-wrap gap-2 text-xs font-medium text-slate-200">
-            <li className="rounded-full border border-white/10 bg-black/20 px-3 py-1">Gratuit</li>
-            <li className="rounded-full border border-white/10 bg-black/20 px-3 py-1">Parties en Lions</li>
-            <li className="rounded-full border border-white/10 bg-black/20 px-3 py-1">Les Coris restent ouverts</li>
-          </ul>
-        </div>
-        <ButtonLink href="/pro" variant="pro" className="h-12 w-full shrink-0 rounded-2xl px-6 text-[15px] shadow-lg shadow-fuchsia-900/40 sm:w-auto sm:min-w-44">
-          Passer Pro
-        </ButtonLink>
-      </div>
-    </section>
+    <Link
+      href="/passer-pro"
+      className="flex items-center justify-between gap-3 rounded-2xl border border-fuchsia-400/30 bg-gradient-to-r from-violet-600/25 to-fuchsia-600/10 px-4 py-3"
+    >
+      <span className="min-w-0">
+        <span className="block text-sm font-bold">Jouez en Lions</span>
+        <span className="block text-xs text-slate-400">Passez Pro gratuitement · le vainqueur empoche 80 %</span>
+      </span>
+      <span className="shrink-0 text-sm font-bold text-fuchsia-200">Pro →</span>
+    </Link>
   );
 }

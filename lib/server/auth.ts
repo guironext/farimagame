@@ -86,10 +86,11 @@ export function effectiveRole(u: UserRow): Role {
 
   if (homeListed && listed(u, homeEmails, homeNames)) return "HOME";
   if (adminListed && listed(u, adminEmails, adminNames)) return "ADMIN";
-  if (adminListed && homeListed) return "JOUEUR";
-  if (adminListed) return u.role === "HOME" ? "HOME" : "JOUEUR";
-  if (homeListed) return u.role === "ADMIN" ? "ADMIN" : "JOUEUR";
-  if (u.role === "ADMIN" || u.role === "HOME") return u.role;
+  // Manager et Maison attribués par l'administrateur restent valables.
+  // Une liste d'e-mails ne retire que le rôle qu'elle remplace.
+  if (u.role === "MANAGER") return "MANAGER";
+  if (u.role === "HOME" && !homeListed) return "HOME";
+  if (u.role === "ADMIN" && !adminListed) return "ADMIN";
   return "JOUEUR";
 }
 

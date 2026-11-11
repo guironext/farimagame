@@ -1,6 +1,6 @@
 import { ProClient } from "@/components/ProClient";
 
-export const metadata = { title: "Niveau Pro – FarimaGame" };
+export const metadata = { title: "Passez Pro – FarimaGame" };
 
 export default function Page() {
   return <ProClient />;

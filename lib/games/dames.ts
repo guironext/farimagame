@@ -48,50 +48,76 @@ export function initialBoard(): number[] {
   return b;
 }
 
-function capturesFrom(board: number[], from: number): DamesMove[] {
+// Une rafle de dames volantes peut compter des millions de trajets. On explore
+// palier par palier et on s'arrête avant de bloquer le serveur : la partie reste jouable.
+const CAPTURE_BUDGET = 8000;
+const FRONTIER_CAP = 2000;
+
+function captureSteps(board: number[], pos: number, seat: number, king: boolean, caps: number[]) {
+  const r0 = Math.floor(pos / 10);
+  const c0 = pos % 10;
+  const steps: { land: number; mid: number }[] = [];
+  for (const [dr, dc] of DIRS) {
+    if (!king) {
+      const mr = r0 + dr, mc = c0 + dc, lr = r0 + 2 * dr, lc = c0 + 2 * dc;
+      if (!inside(lr, lc)) continue;
+      const mid = mr * 10 + mc, land = lr * 10 + lc;
+      if (board[mid] !== 0 && sideOf(board[mid]) !== seat && !caps.includes(mid) && board[land] === 0) steps.push({ land, mid });
+    } else {
+      let r = r0 + dr, c = c0 + dc;
+      while (inside(r, c) && board[r * 10 + c] === 0) {
+        r += dr;
+        c += dc;
+      }
+      if (!inside(r, c)) continue;
+      const mid = r * 10 + c;
+      if (board[mid] === 0 || sideOf(board[mid]) === seat || caps.includes(mid)) continue;
+      let lr = r + dr, lc = c + dc;
+      while (inside(lr, lc) && board[lr * 10 + lc] === 0) {
+        steps.push({ land: lr * 10 + lc, mid });
+        lr += dr;
+        lc += dc;
+      }
+    }
+  }
+  return steps;
+}
+
+function keepPartial(from: number, nodes: { path: number[]; caps: number[] }[], into: DamesMove[]) {
+  for (const fr of nodes) if (fr.caps.length) into.push({ from, path: fr.path, captures: fr.caps });
+}
+
+function capturesFrom(board: number[], from: number, budget: { nodes: number }, stopAt = Infinity): DamesMove[] {
   const piece = board[from];
   const seat = sideOf(piece);
   const king = Math.abs(piece) === 2;
-  const results: DamesMove[] = [];
   const b = board.slice();
-  b[from] = 0; // la pièce quitte sa case de départ
-
-  const dfs = (pos: number, path: number[], caps: number[]) => {
-    const r0 = Math.floor(pos / 10);
-    const c0 = pos % 10;
-    let extended = false;
-    for (const [dr, dc] of DIRS) {
-      if (!king) {
-        const mr = r0 + dr, mc = c0 + dc, lr = r0 + 2 * dr, lc = c0 + 2 * dc;
-        if (!inside(lr, lc)) continue;
-        const mid = mr * 10 + mc, land = lr * 10 + lc;
-        if (b[mid] !== 0 && sideOf(b[mid]) !== seat && !caps.includes(mid) && b[land] === 0) {
-          extended = true;
-          dfs(land, [...path, land], [...caps, mid]);
-        }
-      } else {
-        let r = r0 + dr, c = c0 + dc;
-        while (inside(r, c) && b[r * 10 + c] === 0) {
-          r += dr;
-          c += dc;
-        }
-        if (!inside(r, c)) continue;
-        const mid = r * 10 + c;
-        if (sideOf(b[mid]) === seat || caps.includes(mid)) continue;
-        let lr = r + dr, lc = c + dc;
-        while (inside(lr, lc) && b[lr * 10 + lc] === 0) {
-          const land = lr * 10 + lc;
-          extended = true;
-          dfs(land, [...path, land], [...caps, mid]);
-          lr += dr;
-          lc += dc;
-        }
+  b[from] = 0;
+  let frontier = [{ pos: from, path: [] as number[], caps: [] as number[] }];
+  const done: DamesMove[] = [];
+  for (let jumps = 0; jumps < 20 && frontier.length; jumps++) {
+    const next: typeof frontier = [];
+    for (const fr of frontier) {
+      if (budget.nodes++ > CAPTURE_BUDGET) {
+        keepPartial(from, frontier, done);
+        return done;
       }
+      const steps = captureSteps(b, fr.pos, seat, king, fr.caps);
+      if (!steps.length) {
+        if (fr.caps.length) done.push({ from, path: fr.path, captures: fr.caps });
+        if (done.length >= stopAt) return done;
+        continue;
+      }
+      for (const step of steps) {
+        next.push({ pos: step.land, path: [...fr.path, step.land], caps: [...fr.caps, step.mid] });
+        if (next.length >= FRONTIER_CAP) break;
+      }
+      if (next.length >= FRONTIER_CAP) break;
     }
-    if (!extended && caps.length > 0) results.push({ from, path, captures: caps });
-  };
-  dfs(from, [], []);
-  return results;
+    frontier = next;
+  }
+  keepPartial(from, frontier, done);
+  return done;
 }
 
 function simpleMoves(board: number[], from: number): DamesMove[] {
@@ -118,10 +144,24 @@ function simpleMoves(board: number[], from: number): DamesMove[] {
   return res;
 }
 
+export function sideHasMove(s: DamesState, seat: number = s.turn): boolean {
+  if (s.over) return false;
+  for (let i = 0; i < 100; i++) {
+    if (s.board[i] === 0 || sideOf(s.board[i]) !== seat) continue;
+    if (simpleMoves(s.board, i).length) return true;
+    if (captureSteps(s.board, i, seat, Math.abs(s.board[i]) === 2, []).length) return true;
+  }
+  return false;
+}
+
 export function legalMoves(s: DamesState, seat: number = s.turn): DamesMove[] {
   if (s.over) return [];
+  const budget = { nodes: 0 };
   let caps: DamesMove[] = [];
-  for (let i = 0; i < 100; i++) if (s.board[i] !== 0 && sideOf(s.board[i]) === seat) caps.push(...capturesFrom(s.board, i));
+  for (let i = 0; i < 100; i++) {
+    if (s.board[i] !== 0 && sideOf(s.board[i]) === seat) caps.push(...capturesFrom(s.board, i, budget));
+    if (budget.nodes > CAPTURE_BUDGET) break;
+  }
   if (caps.length) {
     const max = Math.max(...caps.map((m) => m.captures.length));
     caps = caps.filter((m) => m.captures.length === max);
@@ -164,7 +204,7 @@ function applyRaw(s: DamesState, m: DamesMove): DamesState {
   if (n.quiet >= DAMES_DRAW_QUIET) {
     n.over = true;
     n.draw = true;
-  } else if (legalMoves(n, n.turn).length === 0) {
+  } else if (!sideHasMove(n, n.turn)) {
     n.over = true;
     n.winner = s.turn;
   }
@@ -185,21 +225,6 @@ function evaluate(b: number[], seat: number): number {
     v += sideOf(p) === seat ? val : -val;
   }
   return v;
-}
-
-function negamax(s: DamesState, depth: number, alpha: number, beta: number): number {
-  const seat = s.turn;
-  if (s.over) return s.draw ? 0 : s.winner === seat ? 100000 + depth : -100000 - depth;
-  if (depth === 0) return evaluate(s.board, seat);
-  const moves = legalMoves(s, seat);
-  let best = -Infinity;
-  for (const m of moves) {
-    const v = -negamax(applyRaw(s, m), depth - 1, -beta, -alpha);
-    if (v > best) best = v;
-    if (best > alpha) alpha = best;
-    if (alpha >= beta) break;
-  }
-  return best;
 }
 
 export function sameMove(a: DamesMove, b: { from: number; path: number[] }) {
@@ -239,14 +264,15 @@ export const dames: Engine<DamesState, { from: number; path: number[] }> = {
   },
   ai(s, seat) {
     const moves = legalMoves(s, seat);
+    if (!moves.length) return { from: 0, path: [] };
     if (moves.length === 1) return { from: moves[0].from, path: moves[0].path };
-    let pieces = 0;
-    for (const p of s.board) if (p) pieces++;
-    const depth = pieces < 12 ? 5 : 4;
-    let best = moves[0];
+    // Un seul coup d'avance : l'ancienne recherche profonde bloquait la partie en ligne.
+    const sample = moves.slice(0, 16);
+    let best = sample[0];
     let bestV = -Infinity;
-    for (const m of moves) {
-      const v = -negamax(applyRaw(s, m), depth - 1, -Infinity, Infinity) + Math.random() * 2;
+    for (const m of sample) {
+      const n = applyRaw(s, m);
+      const v = n.over ? (n.draw ? 0 : n.winner === seat ? 5000 : -5000) : evaluate(n.board, seat);
       if (v > bestV) {
         bestV = v;
         best = m;

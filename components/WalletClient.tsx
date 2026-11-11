@@ -105,7 +105,7 @@ export function WalletClient() {
         <Card>
           <div className="text-sm text-slate-400">Coris</div>
           <div className="mt-1 text-2xl"><Money amount={me.coris} currency="coris" className="text-amber-300" /></div>
-          <div className="mt-2 text-xs text-slate-400">{config.CORIS_PER_LION} Coris = 1 Lion (page <Link href="/pro" className="text-fuchsia-300">Niveau Pro</Link>)</div>
+          <div className="mt-2 text-xs text-slate-400">{config.CORIS_PER_LION} Coris = 1 Lion (page <Link href="/passer-pro" className="text-fuchsia-300">Niveau Pro</Link>)</div>
         </Card>
       </div>
 
@@ -184,7 +184,7 @@ export function WalletClient() {
           ) : !isPro ? (
             <div className="space-y-3 text-sm text-slate-300">
               <p>La conversion des Lions en F CFA est réservée aux joueurs <strong className="text-fuchsia-300">Pro</strong>.</p>
-              <ButtonLink href="/pro" variant="pro">🦁 Passer au niveau Pro</ButtonLink>
+              <ButtonLink href="/passer-pro" variant="pro">🦁 Passer au niveau Pro</ButtonLink>
             </div>
           ) : (
             <div className="space-y-4">
@@ -209,7 +209,7 @@ export function WalletClient() {
               </div>
               {maxLions < 1 && (
                 <p className="text-xs text-slate-400">
-                  Vous n&apos;avez pas de Lion. Gagnez des Coris au salon puis convertissez-les en Lions sur la page <Link href="/pro" className="text-fuchsia-300">Niveau Pro</Link>.
+                  Vous n&apos;avez pas de Lion. Gagnez des Coris au salon puis convertissez-les en Lions sur la page <Link href="/passer-pro" className="text-fuchsia-300">Niveau Pro</Link>.
                 </p>
               )}
             </div>

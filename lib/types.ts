@@ -1,10 +1,17 @@
 export type Currency = "coris" | "lions" | "fcfa";
 /** Monnaies utilisables aux tables de jeu. */
 export type GameCurrency = "coris" | "lions";
-export type GameId = "ludo" | "dames" | "awale" | "echecs";
+export type GameId = "ludo" | "dames" | "awale" | "echecs" | "run" | "course";
 export type Mode = "cpu" | "2" | "3" | "4";
 export type Level = "normal" | "pro";
-export type Role = "JOUEUR" | "ADMIN" | "HOME";
+export type Role = "JOUEUR" | "MANAGER" | "ADMIN" | "HOME";
+
+export const ROLE_LABEL: Record<Role, string> = {
+  JOUEUR: "Joueur",
+  MANAGER: "Manager",
+  ADMIN: "Administrateur",
+  HOME: "Maison",
+};
 
 /** Caisse, commissions, dépôts, retraits et règlement des mises. */
 export const canManageMoney = (role: Role) => role === "HOME" || role === "ADMIN";

@@ -20,6 +20,8 @@ export function Footer() {
               ["/salon?jeu=dames", "Dames"],
               ["/salon?jeu=awale", "Awalé"],
               ["/salon?jeu=echecs", "Échecs"],
+              ["/salon?jeu=run", "Endless Run"],
+              ["/salon?jeu=course", "Course auto"],
             ]}
           />
           <FooterCol
@@ -34,7 +36,7 @@ export function Footer() {
             title="Compte"
             links={[
               ["/tableau-de-bord", "Tableau de bord"],
-              ["/pro", "Niveau Pro"],
+              ["/passer-pro", "Passez Pro"],
               ["/inscription", "Inscription"],
             ]}
           />

@@ -1,4 +1,5 @@
 import { HOUSE_SHARE, INACTIVITY_CLAIM_MS, PRO_STAKE_LIONS, STAKE_CORIS, WINNER_SHARE, fromUnits, toUnits } from "../config";
+import { sideHasMove, type DamesState } from "../games/dames";
 import { ENGINES } from "../games";
 import { GAMES, modeLabel, modePlayers } from "../games/meta";
 import type { Currency, GameId, Mode, TableView } from "../types";
@@ -9,8 +10,9 @@ import { CURRENCY_LABEL, getUser, houseMove, walletMove } from "./wallet";
 const CPU_NAME = "Ordinateur";
 const MAX_LOG = 40;
 
-export function stakeFor(currency: Currency): number {
-  return currency === "coris" ? toUnits(STAKE_CORIS) : toUnits(PRO_STAKE_LIONS);
+export function stakeFor(game: GameId, currency: Currency): number {
+  const coris = GAMES[game]?.stakeCoris ?? STAKE_CORIS;
+  return currency === "coris" ? toUnits(coris) : toUnits(PRO_STAKE_LIONS);
 }
 
 function names(t: TableRow) {
@@ -116,7 +118,7 @@ export async function createTable(userId: string, gameRaw: unknown, modeRaw: unk
   return await transact((db) => {
     const u = getUser(db, userId);
     if (currency === "lions" && u.level !== "pro") throw new AppError(403, "Les parties en Lions sont réservées aux joueurs Pro.");
-    const stake = stakeFor(currency);
+    const stake = stakeFor(game, currency);
     const id = newId("t_");
     const t: TableRow = {
       id,
@@ -272,10 +274,11 @@ export async function invitePlayer(userId: string, tableId: string, usernameRaw:
 }
 
 /** Joueurs libres pour la monnaie du mode choisi : assez de solde, pas déjà à une table. */
-export async function listAvailablePlayers(userId: string, currencyRaw: unknown) {
+export async function listAvailablePlayers(userId: string, currencyRaw: unknown, gameRaw?: unknown) {
   const currency: Currency = currencyRaw === "lions" ? "lions" : "coris";
+  const game = String(gameRaw ?? "") as GameId;
   const db = await readDb();
-  const stake = stakeFor(currency);
+  const stake = GAMES[game] ? stakeFor(game, currency) : toUnits(STAKE_CORIS);
   const busy = new Set<string>();
   for (const t of db.tables) {
     if (t.status !== "waiting" && t.status !== "playing") continue;
@@ -317,7 +320,7 @@ export async function tableAction(userId: string, tableId: string, body: Record<
       checkOver(db, t);
       runCpu(db, t);
     } else if (action === "cpu") {
-      if (t.game !== "ludo" && t.game !== "dames" && t.game !== "awale" && t.game !== "echecs") throw new AppError(400, "Action inconnue.");
+      if (t.game !== "ludo" && t.game !== "dames" && t.game !== "awale" && t.game !== "echecs" && t.game !== "run" && t.game !== "course") throw new AppError(400, "Action inconnue.");
       const cur = engine.current(t.state);
       if (cur == null || !t.seats[cur]?.isCpu) return;
       const move = engine.ai(t.state, cur);
@@ -370,9 +373,33 @@ export function viewTable(t: TableRow, userId: string | null): TableView {
   };
 }
 
+function damesNeedsRescue(t: TableRow) {
+  if (t.game !== "dames" || t.status !== "playing" || !t.state) return false;
+  const s = t.state as DamesState;
+  return !s.over && !sideHasMove(s, s.turn);
+}
+
+/** Une partie déjà bloquée (plus aucun coup, mais pas terminée) est réglée à la lecture. */
+function rescueDames(db: Db, t: TableRow) {
+  if (!damesNeedsRescue(t)) return;
+  const s = t.state as DamesState;
+  s.over = true;
+  s.winner = (1 - s.turn) as 0 | 1;
+  s.draw = false;
+  checkOver(db, t);
+  t.version++;
+  pushLog(t, ["Partie débloquée : le joueur au trait ne peut plus jouer"]);
+}
+
 export async function getTableView(tableId: string, userId: string | null) {
   const db = await readDb();
-  return viewTable(getTable(db, tableId), userId);
+  const t = getTable(db, tableId);
+  if (!damesNeedsRescue(t)) return viewTable(t, userId);
+  return transact((db2) => {
+    const t2 = getTable(db2, tableId);
+    rescueDames(db2, t2);
+    return viewTable(t2, userId);
+  });
 }
 
 function lightView(t: TableRow, userId: string) {

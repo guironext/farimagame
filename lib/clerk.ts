@@ -16,7 +16,7 @@ export const AFTER_SIGN_IN_URL = "/salon";
 export const AFTER_SIGN_UP_URL = "/tableau-de-bord?bienvenue=1";
 
 /** Pages réservées aux joueurs connectés (les API vérifient aussi la connexion de leur côté). */
-const PROTECTED_PREFIXES = ["/tableau-de-bord", "/portefeuille", "/pro", "/salon", "/jeu", "/paris/mes-paris", "/maison", "/admin"];
+const PROTECTED_PREFIXES = ["/tableau-de-bord", "/portefeuille", "/passer-pro", "/pro", "/salon", "/jeu", "/paris/mes-paris", "/maison", "/admin"];
 
 export function isProtectedPath(pathname: string) {
   return PROTECTED_PREFIXES.some((p) => pathname === p || pathname.startsWith(p + "/"));

@@ -31,7 +31,7 @@ export function HomeCta({ variant = "hero" }: { variant?: "hero" | "banner" }) {
           {loading ? (
             <div className="skeleton h-12 w-56 rounded-2xl" />
           ) : (
-            <Link href={me ? "/pro" : "/inscription"} className={cx(primary, "w-full sm:w-auto")}>
+            <Link href={me ? "/passer-pro" : "/inscription"} className={cx(primary, "w-full sm:w-auto")}>
               {me ? "🦁 Découvrir le niveau Pro" : `🎁 S'inscrire · ${bonus} Coris`}
             </Link>
           )}

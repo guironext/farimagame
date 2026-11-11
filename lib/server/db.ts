@@ -191,10 +191,23 @@ export interface PaymentRow {
   updatedAt: string;
 }
 
+export interface StaffInvite {
+  id: string;
+  email: string;
+  role: "MANAGER" | "HOME";
+  status: "pending" | "accepted" | "revoked";
+  createdAt: string;
+  createdBy: string;
+  clerkInvitationId?: string;
+  acceptedAt?: string;
+  userId?: string;
+}
+
 export interface Db {
   users: UserRow[];
   sessions: SessionRow[];
   transactions: TxRow[];
+  staffInvites: StaffInvite[];
   house: { coris: number; lions: number; fcfa: number; ledger: HouseTxRow[] };
   tables: TableRow[];
   matches: MatchRow[];
@@ -222,6 +235,7 @@ function emptyDb(): Db {
     users: [],
     sessions: [],
     transactions: [],
+    staffInvites: [],
     house: { coris: 0, lions: 0, fcfa: 0, ledger: [] },
     tables: [],
     matches: [],
@@ -235,9 +249,10 @@ function emptyDb(): Db {
 function normalize(db: Db): Db {
   db.house = { ...emptyDb().house, ...db.house };
   db.house.fcfa ??= 0;
+  db.staffInvites ??= [];
   for (const u of db.users) {
     u.fcfa ??= 0;
-    if (u.role !== "ADMIN" && u.role !== "HOME") u.role = "JOUEUR";
+    if (u.role !== "ADMIN" && u.role !== "HOME" && u.role !== "MANAGER") u.role = "JOUEUR";
   }
   for (const t of db.tables) t.invites ??= [];
   // Le premier administrateur est désigné à la création du compte (voir provisionUser dans wallet.ts).

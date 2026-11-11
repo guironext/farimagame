@@ -3,6 +3,7 @@
 
 export const SIGNUP_BONUS_CORIS = 500; // Coris offerts à l'inscription
 export const STAKE_CORIS = 50; // mise pour une partie en Coris (niveau normal)
+export const STAKE_CORIS_RUN = 20; // mise Endless Run et Course auto, en Coris
 export const CORIS_PER_LION = 50; // taux de conversion : 50 Coris = 1 Lion
 // Mise d'une partie Pro en Lions (configurable par variable d'environnement PRO_STAKE_LIONS)
 export const PRO_STAKE_LIONS = Number(process.env.PRO_STAKE_LIONS ?? 1) || 1;

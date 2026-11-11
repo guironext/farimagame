@@ -18,7 +18,10 @@ function count(board: number[], kind: number) {
 export function DamesBoard({ table, state, mySeat, canPlay, busy, onMove }: BoardProps<DamesState>) {
   const [sel, setSel] = useState<{ from: number; path: number[]; at: number } | null>(null);
   const flip = mySeat === 1;
-  const moves = canPlay && mySeat != null ? legalMoves(state, mySeat) : [];
+  const moves = useMemo(
+    () => (canPlay && mySeat != null ? legalMoves(state, mySeat) : []),
+    [canPlay, mySeat, state],
+  );
   const active = sel && sel.at === state.moves ? sel : null;
   const cands = active ? moves.filter((m) => m.from === active.from && active.path.every((p, i) => m.path[i] === p)) : [];
   const next = new Set(cands.map((m) => m.path[active!.path.length]).filter((x) => x !== undefined));

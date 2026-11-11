@@ -46,7 +46,7 @@ const DESKTOP_LINKS = [
   { href: "/paris", label: "Paris sportifs" },
   { href: "/paris/mes-paris", label: "Mes paris", auth: true },
   { href: "/portefeuille", label: "Portefeuille", auth: true },
-  { href: "/pro", label: "Niveau Pro", auth: true },
+  { href: "/passer-pro", label: "Passez Pro", auth: true },
 ];
 
 export function Navbar() {
@@ -103,15 +103,15 @@ function DesktopNav({ pathname }: { pathname: string | null }) {
           </Link>
         );
       })}
-      {me && canManageMoney(me.role) && (
+      {me?.role === "HOME" && (
         <Link
-          href={me.role === "HOME" ? "/maison" : "/admin/paris"}
+          href="/maison"
           className={cx(
             "whitespace-nowrap rounded-xl px-3 py-2 text-sm font-medium transition",
-            isActive(pathname, "/admin") || isActive(pathname, "/maison") ? "bg-white/[0.07] text-white" : "text-slate-400 hover:bg-white/5 hover:text-white",
+            isActive(pathname, "/maison") ? "bg-white/[0.07] text-white" : "text-slate-400 hover:bg-white/5 hover:text-white",
           )}
         >
-          {me.role === "HOME" ? "Maison" : "Admin"}
+          Maison
         </Link>
       )}
     </nav>
@@ -166,11 +166,13 @@ function AccountArea() {
 
   const isAdmin = me.role === "ADMIN";
   const isHome = me.role === "HOME";
+  const isManager = me.role === "MANAGER";
   const menu = [
     { href: "/tableau-de-bord", label: "Tableau de bord", icon: IconChart },
     { href: "/portefeuille", label: "Portefeuille", icon: IconWallet },
     { href: "/paris/mes-paris", label: "Mes paris", icon: IconTicket },
-    { href: "/pro", label: me.level === "pro" ? "Niveau Pro (actif)" : "Passer Pro", icon: IconCrown },
+    { href: "/passer-pro", label: me.level === "pro" ? "Niveau Pro (actif)" : "Passez Pro", icon: IconCrown },
+    ...(isAdmin ? [{ href: "/admin", label: "Comptes", icon: IconShield }] : []),
     ...(canManageMoney(me.role)
       ? [
           { href: "/admin/paris", label: isHome ? "Argent des paris" : "Admin paris", icon: IconShield },
@@ -214,6 +216,7 @@ function AccountArea() {
             <div className="text-xs text-slate-400">
               {me.level === "pro" ? "Joueur Pro 🦁" : "Joueur"}
               {isAdmin && " · Administrateur"}
+              {isManager && " · Manager"}
               {isHome && " · Maison"}
             </div>
           </div>
@@ -332,7 +335,7 @@ function BottomTabBar({ pathname }: { pathname: string | null }) {
           href: "/portefeuille",
           label: "Portefeuille",
           icon: IconWallet,
-          active: ["/portefeuille", "/tableau-de-bord", "/pro"].some((h) => isActive(pathname, h)),
+          active: ["/portefeuille", "/tableau-de-bord", "/pro", "/passer-pro"].some((h) => isActive(pathname, h)),
         }
       : { href: "/connexion", label: "Compte", icon: IconUser, active: isActive(pathname, "/connexion") || isActive(pathname, "/inscription") },
   ];

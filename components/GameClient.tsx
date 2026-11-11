@@ -11,6 +11,8 @@ import { AwaleBoard } from "./games/AwaleBoard";
 import { ChessBoard } from "./games/ChessBoard";
 import { DamesBoard } from "./games/DamesBoard";
 import { LudoBoard } from "./games/LudoBoard";
+import { RaceBoard } from "./games/RaceBoard";
+import { RunBoard } from "./games/RunBoard";
 import { VictoryConfetti } from "./VictoryConfetti";
 import { useSession } from "./SessionProvider";
 import { Alert, Button, Card, Money, Spinner, cx, useRequireAuth } from "./ui";
@@ -86,7 +88,7 @@ export function GameClient({ id }: { id: string }) {
 
   useEffect(() => {
     if (!me || !table || table.mySeat == null || table.status !== "playing") return;
-    if (table.game !== "ludo" && table.game !== "dames" && table.game !== "awale" && table.game !== "echecs") return;
+    if (table.game !== "ludo" && table.game !== "dames" && table.game !== "awale" && table.game !== "echecs" && table.game !== "run" && table.game !== "course") return;
     const cur = table.currentSeat != null ? table.seats[table.currentSeat] : null;
     if (!cur?.isCpu) return;
     const elapsed = Date.now() - new Date(table.lastMoveAt ?? table.startedAt ?? table.createdAt).getTime();
@@ -146,6 +148,8 @@ export function GameClient({ id }: { id: string }) {
   const mySeat = table.mySeat;
   const playing = table.status === "playing";
   const myTurn = playing && mySeat != null && table.currentSeat === mySeat && table.seats[mySeat]?.active;
+  const courseState = table.game === "course" ? (table.state as { over?: boolean; scores?: (unknown | null)[] }) : null;
+  const courseCanPlay = playing && mySeat != null && !!table.seats[mySeat]?.active && !!courseState && !courseState.over && courseState.scores?.[mySeat] == null;
   const curSeat = table.currentSeat != null ? table.seats[table.currentSeat] : null;
   const idle = table.lastMoveAt ? now - new Date(table.lastMoveAt).getTime() : 0;
   const canClaim = playing && mySeat != null && curSeat && !curSeat.isCpu && table.currentSeat !== mySeat && idle > INACTIVITY_CLAIM_MS;
@@ -280,6 +284,8 @@ export function GameClient({ id }: { id: string }) {
               {table.game === "dames" && <DamesBoard {...boardProps} state={table.state as never} />}
               {table.game === "echecs" && <ChessBoard {...boardProps} state={table.state as never} />}
               {table.game === "ludo" && <LudoBoard {...boardProps} state={table.state as never} />}
+              {table.game === "run" && <RunBoard {...boardProps} state={table.state as never} />}
+              {table.game === "course" && <RaceBoard {...boardProps} canPlay={courseCanPlay} state={table.state as never} />}
             </>
           )}
         </div>
@@ -317,14 +323,14 @@ export function GameClient({ id }: { id: string }) {
             <ul className="space-y-2">
               {Array.from({ length: table.maxPlayers }).map((_, i) => {
                 const s = table.seats[i];
-                const isTurn = playing && table.currentSeat === i;
+                const isTurn = courseState ? playing && !courseState.over && !!s && courseState.scores?.[i] == null : playing && table.currentSeat === i;
                 return (
                   <li key={i} className={cx("flex items-center justify-between rounded-xl px-3 py-2 text-sm", isTurn ? "bg-amber-400/15 ring-1 ring-amber-400/50" : "bg-white/5")}>
                     <span className={cx(!s?.active && s && "line-through opacity-60")}>
                       {s ? (s.isCpu ? "🤖 " : "👤 ") + s.username : <em className="text-slate-500">Place libre</em>}
                       {s && s.seat === mySeat && <span className="ml-1 text-xs text-amber-300">(vous)</span>}
                     </span>
-                    {isTurn && <span className="text-xs font-semibold text-amber-300">à jouer</span>}
+                    {isTurn && <span className="text-xs font-semibold text-amber-300">{courseState ? "en course" : "à jouer"}</span>}
                     {table.status === "finished" && table.winnerSeat === i && <span>🏆</span>}
                   </li>
                 );
@@ -332,9 +338,15 @@ export function GameClient({ id }: { id: string }) {
             </ul>
             {playing && (
               <p className="mt-3 text-center text-sm">
-                {myTurn ? (
+                {courseCanPlay ? (
+                  <span className="font-semibold text-emerald-300">Les deux voitures courent ensemble. Le premier à la ligne gagne.</span>
+                ) : myTurn ? (
                   <span className="font-semibold text-emerald-300">
-                    {table.game === "ludo" ? "À vous : lancez le dé, puis un seul pion." : "C'est à vous de jouer !"}
+                    {table.game === "ludo"
+                      ? "À vous : lancez le dé, puis un seul pion."
+                      : table.game === "run"
+                        ? "À vous : courez le plus loin possible."
+                        : "C'est à vous de jouer !"}
                   </span>
                 ) : curSeat?.isCpu ? (
                   <span className="font-semibold text-amber-200">
@@ -344,7 +356,11 @@ export function GameClient({ id }: { id: string }) {
                         ? "L'ordinateur sème."
                         : table.game === "ludo"
                           ? "L'ordinateur joue : son dé, puis un seul pion."
-                          : "L'ordinateur joue."}
+                          : table.game === "run"
+                            ? "L'ordinateur court."
+                            : table.game === "course"
+                              ? "L'ordinateur termine sa course."
+                              : "L'ordinateur joue."}
                   </span>
                 ) : (
                   <span className="text-slate-400">En attente de {curSeat?.username ?? "…"}</span>

@@ -1,3 +1,4 @@
+import { STAKE_CORIS, STAKE_CORIS_RUN } from "../config";
 import type { GameId, Mode } from "../types";
 
 export interface GameMeta {
@@ -8,6 +9,7 @@ export interface GameMeta {
   modes: Mode[];
   description: string;
   color: string; // classes tailwind de dégradé
+  stakeCoris: number;
 }
 
 export const GAMES: Record<GameId, GameMeta> = {
@@ -20,6 +22,7 @@ export const GAMES: Record<GameId, GameMeta> = {
     description:
       "Lancez le dé, sortez vos pions avec un 6 et ramenez les 4 à la maison avant vos adversaires.",
     color: "from-rose-500 to-orange-400",
+    stakeCoris: STAKE_CORIS,
   },
   dames: {
     id: "dames",
@@ -30,6 +33,7 @@ export const GAMES: Record<GameId, GameMeta> = {
     description:
       "Dames internationales 10×10 : prise obligatoire et majoritaire, dames volantes.",
     color: "from-amber-600 to-yellow-400",
+    stakeCoris: STAKE_CORIS,
   },
   awale: {
     id: "awale",
@@ -40,6 +44,7 @@ export const GAMES: Record<GameId, GameMeta> = {
     description:
       "Semez les graines, capturez par 2 ou 3 chez l'adversaire. Le premier à 25 graines gagne.",
     color: "from-emerald-600 to-lime-400",
+    stakeCoris: STAKE_CORIS,
   },
   echecs: {
     id: "echecs",
@@ -50,6 +55,28 @@ export const GAMES: Record<GameId, GameMeta> = {
     description:
       "Le roi des jeux de stratégie : mettez le roi adverse échec et mat.",
     color: "from-sky-600 to-indigo-500",
+    stakeCoris: STAKE_CORIS,
+  },
+  run: {
+    id: "run",
+    name: "Endless Run",
+    short: "Run",
+    emoji: "🏃",
+    modes: ["cpu", "2"],
+    description:
+      "Courez sans fin sur trois voies. Sautez, glissez, changez de voie. Le plus loin gagne.",
+    color: "from-cyan-500 to-fuchsia-500",
+    stakeCoris: STAKE_CORIS_RUN,
+  },
+  course: {
+    id: "course",
+    name: "Course auto",
+    short: "Course",
+    emoji: "🏎️",
+    modes: ["cpu", "2"],
+    description: "Deux voitures, trois voies. Accélérez, freinez, évitez les barrières. Le premier à la ligne gagne.",
+    color: "from-red-600 to-amber-400",
+    stakeCoris: STAKE_CORIS_RUN,
   },
 };
 

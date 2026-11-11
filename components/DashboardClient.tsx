@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { api, fmtDate } from "@/lib/client";
 import { GAMES, modeLabel } from "@/lib/games/meta";
-import type { TableView, TxView } from "@/lib/types";
+import { ROLE_LABEL, type TableView, type TxView } from "@/lib/types";
 import { useSession } from "./SessionProvider";
 import { Alert, ButtonLink, Card, Money, PageTitle, Spinner, cx, useRequireAuth } from "./ui";
 
@@ -48,7 +48,7 @@ export function DashboardClient() {
         <Card className="border-fuchsia-400/20 bg-gradient-to-br from-fuchsia-500/15 to-transparent">
           <div className="text-sm text-slate-400">Solde Lions</div>
           <div className="mt-1 text-3xl"><Money amount={me.lions} currency="lions" className="text-fuchsia-300" /></div>
-          {me.level !== "pro" && <Link href="/pro" className="mt-2 inline-block text-xs text-fuchsia-300">Passer Pro pour obtenir des Lions →</Link>}
+          {me.level !== "pro" && <Link href="/passer-pro" className="mt-2 inline-block text-xs text-fuchsia-300">Passer Pro pour obtenir des Lions →</Link>}
         </Card>
         <Card className="border-emerald-400/20 bg-gradient-to-br from-emerald-500/15 to-transparent">
           <div className="text-sm text-slate-400">Solde F CFA</div>
@@ -61,7 +61,7 @@ export function DashboardClient() {
             <span className={cx("rounded-full px-3 py-1 text-sm font-bold", me.level === "pro" ? "bg-fuchsia-500/20 text-fuchsia-200" : "bg-amber-500/20 text-amber-200")}>
               {me.level === "pro" ? "🦁 PRO" : "🐚 NORMAL"}
             </span>
-            <span className="rounded-full bg-white/10 px-3 py-1 text-xs">{me.role}</span>
+            <span className="rounded-full bg-white/10 px-3 py-1 text-xs">{ROLE_LABEL[me.role]}</span>
           </div>
           {data && (
             <div className="mt-3 text-xs text-slate-400">
@@ -74,7 +74,7 @@ export function DashboardClient() {
       <div className="flex flex-wrap gap-3">
         <ButtonLink href="/salon">🎮 Jouer maintenant</ButtonLink>
         <ButtonLink href="/paris" variant="ghost">⚽ Paris sportifs</ButtonLink>
-        <ButtonLink href="/pro" variant="pro">🦁 Niveau Pro & conversion</ButtonLink>
+        <ButtonLink href="/passer-pro" variant="pro">🦁 Niveau Pro & conversion</ButtonLink>
       </div>
 
       {tables.length > 0 && (

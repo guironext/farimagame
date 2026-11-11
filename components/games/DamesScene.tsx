@@ -159,7 +159,7 @@ export function DamesScene({ display, flip, movable, nextSquares, selected, pend
 
     const markers: THREE.Mesh[] = [];
     const markerGeo = new THREE.CircleGeometry(0.16, 20);
-    for (let i = 0; i < 16; i++) {
+    for (let i = 0; i < 50; i++) {
       const mesh = new THREE.Mesh(
         markerGeo,
         new THREE.MeshBasicMaterial({ color: 0x34d399, transparent: true, opacity: 0.9, side: THREE.DoubleSide }),

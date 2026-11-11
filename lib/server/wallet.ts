@@ -98,13 +98,15 @@ export async function provisionUser(clerkId: string, profile: ExternalProfile): 
     const username = uniqueUsername(db, base);
     // Les anciens comptes à mot de passe ne peuvent plus se connecter : seul un admin relié à Clerk compte.
     const hasActiveAdmin = db.users.some((u) => u.role === "ADMIN" && u.clerkId);
+    const invite = email ? db.staffInvites.find((i) => i.status === "pending" && i.email === email) : undefined;
+    const role = invite && hasActiveAdmin ? invite.role : hasActiveAdmin ? "JOUEUR" : "ADMIN";
     const user: UserRow = {
       id: newId("u_"),
       clerkId,
       email,
       username,
       usernameLower: username.toLowerCase(),
-      role: hasActiveAdmin ? "JOUEUR" : "ADMIN",
+      role,
       level: "normal",
       coris: 0,
       lions: 0,
@@ -112,6 +114,11 @@ export async function provisionUser(clerkId: string, profile: ExternalProfile): 
       createdAt: nowIso(),
     };
     db.users.push(user);
+    if (invite && role === invite.role) {
+      invite.status = "accepted";
+      invite.userId = user.id;
+      invite.acceptedAt = nowIso();
+    }
     walletMove(db, user, "coris", toUnits(SIGNUP_BONUS_CORIS), "bonus", "Bonus de bienvenue");
     return user;
   });
@@ -139,6 +146,23 @@ export async function convertCorisToLions(userId: string, lionsRaw: unknown) {
     if (u.coris < cost) throw new AppError(400, `Solde insuffisant : il faut ${lions * CORIS_PER_LION} Coris.`);
     walletMove(db, u, "coris", -cost, "conversion_debit", `Conversion en ${lions} Lion(s)`);
     walletMove(db, u, "lions", toUnits(lions), "conversion_credit", `Conversion de ${lions * CORIS_PER_LION} Coris`);
+    return u;
+  });
+}
+
+/** Achat de Lions avec le solde F CFA (taux FCFA_PER_LION). Réservé aux joueurs Pro. */
+export async function buyLionsWithFcfa(userId: string, lionsRaw: unknown) {
+  const lions = Number(lionsRaw);
+  if (!Number.isInteger(lions) || lions < 1 || lions > 100000)
+    throw new AppError(400, "Indiquez un nombre entier de Lions (au moins 1).");
+  return transact((db) => {
+    const u = getUser(db, userId);
+    if (u.level !== "pro") throw new AppError(403, "Passez d'abord au niveau Pro.");
+    const cost = lions * FCFA_PER_LION;
+    const costUnits = toUnits(cost);
+    if (u.fcfa < costUnits) throw new AppError(400, `Solde insuffisant : il faut ${cost.toLocaleString("fr-FR")} F CFA.`);
+    walletMove(db, u, "fcfa", -costUnits, "conversion_debit", `Achat de ${lions} Lion(s) (${cost.toLocaleString("fr-FR")} F CFA)`);
+    walletMove(db, u, "lions", toUnits(lions), "conversion_credit", `Achat de ${lions} Lion(s)`);
     return u;
   });
 }
